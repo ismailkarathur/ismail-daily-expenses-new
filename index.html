@@ -197,7 +197,7 @@
 
   <!-- Transaction Modal -->
   <div id="txModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
-    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
       <h3 id="txModalTitle" class="text-lg font-bold text-white">Add Entry</h3>
       <form id="txForm" onsubmit="saveTransaction(event)" class="space-y-3">
         <input type="hidden" id="editDocId">
@@ -228,6 +228,13 @@
             <label class="block text-xs font-medium text-gray-400 mb-1">Site / Project</label>
             <input type="text" id="txSite" placeholder="e.g. Modar" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
           </div>
+        </div>
+
+        <!-- Attached Photo / Document Upload Section -->
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1">Attach Bill / Photo / Document</label>
+          <input type="file" id="txFile" accept="image/*,application/pdf" class="w-full p-2 bg-[#121212] border border-[#333] rounded-xl text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-black hover:file:bg-amber-400">
+          <div id="existingFileLink" class="mt-1 text-xs"></div>
         </div>
 
         <div class="flex items-center justify-between pt-3">
@@ -263,6 +270,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
     import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyA2i0T8X2tlbyD0Cv4BclaXw-WV67W4rjg",
@@ -277,9 +285,11 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db = getFirestore(app);
+    const storage = getStorage(app);
 
     window.auth = auth;
     window.db = db;
+    window.storage = storage;
     window.signInWithEmailAndPassword = signInWithEmailAndPassword;
     window.signOut = signOut;
     window.collection = collection;
@@ -290,6 +300,9 @@
     window.deleteDoc = deleteDoc;
     window.query = query;
     window.orderBy = orderBy;
+    window.ref = ref;
+    window.uploadBytes = uploadBytes;
+    window.getDownloadURL = getDownloadURL;
 
     onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -431,7 +444,10 @@
           <td class="p-2"><input type="checkbox" class="txCheckbox" value="${item.id}"></td>
           <td class="p-2 text-gray-300 font-mono">${item.date}</td>
           <td class="p-2"><span class="px-2 py-0.5 bg-[#2a2a2a] text-amber-400 rounded text-[10px] font-medium">${item.category}</span></td>
-          <td class="p-2 font-medium text-white">${item.title}</td>
+          <td class="p-2 font-medium text-white">
+            ${item.title}
+            ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">📎 View File</a>` : ''}
+          </td>
           <td class="p-2 text-gray-400">${item.site || '-'}</td>
           <td class="p-2 font-bold ${isInc ? 'text-green-400' : 'text-amber-500'}">
             ${isInc ? '+' : '-'}₹${parseFloat(item.amount).toFixed(2)}
@@ -481,6 +497,7 @@
       document.getElementById('txType').value = type;
       document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('deleteTxModalBtn').classList.add('hidden');
+      document.getElementById('existingFileLink').innerHTML = '';
       const siteContainer = document.getElementById('txSiteContainer');
       if (type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Add Income';
@@ -502,6 +519,14 @@
       document.getElementById('txDate').value = item.date || new Date().toISOString().split('T')[0];
       document.getElementById('txType').value = item.type || 'Expense';
       document.getElementById('deleteTxModalBtn').classList.remove('hidden');
+      
+      const fileContainer = document.getElementById('existingFileLink');
+      if (item.fileUrl) {
+        fileContainer.innerHTML = `<a href="${item.fileUrl}" target="_blank" class="text-blue-400 underline">View current attached file</a>`;
+      } else {
+        fileContainer.innerHTML = '';
+      }
+
       const siteContainer = document.getElementById('txSiteContainer');
       if (item.type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Edit Income';
@@ -518,6 +543,7 @@
     function closeTransactionModal() { 
       document.getElementById('txForm').reset();
       document.getElementById('deleteTxModalBtn').classList.add('hidden');
+      document.getElementById('existingFileLink').innerHTML = '';
       document.getElementById('txModal').classList.add('hidden');
     }
 
@@ -530,19 +556,41 @@
       const date = document.getElementById('txDate').value;
       const type = document.getElementById('txType').value;
       const site = type === 'Expense' ? document.getElementById('txSite').value : '';
+      const fileInput = document.getElementById('txFile');
+
+      const saveBtn = document.getElementById('saveEntryBtn');
+      saveBtn.innerText = "Saving...";
+      saveBtn.disabled = true;
 
       try {
+        let fileUrl = '';
+        const existingItem = id ? allTx.find(x => x.id === id) : null;
+        if (existingItem) {
+          fileUrl = existingItem.fileUrl || '';
+        }
+
+        if (fileInput.files && fileInput.files[0]) {
+          const file = fileInput.files[0];
+          const storageRef = window.ref(window.storage, `receipts/${Date.now()}_${file.name}`);
+          const snapshot = await window.uploadBytes(storageRef, file);
+          fileUrl = await window.getDownloadURL(snapshot.ref);
+        }
+
+        const dataPayload = { title, amount, category, date, site, type, fileUrl };
+
         if (id) {
-          await window.updateDoc(window.doc(window.db, "transactions", id), { title, amount, category, date, site, type });
+          await window.updateDoc(window.doc(window.db, "transactions", id), dataPayload);
         } else {
-          await window.addDoc(window.collection(window.db, "transactions"), {
-            title, amount, category, date, site, type, createdAt: Date.now()
-          });
+          dataPayload.createdAt = Date.now();
+          await window.addDoc(window.collection(window.db, "transactions"), dataPayload);
         }
         closeTransactionModal();
         loadDataFromFirebase();
       } catch (err) {
         alert("Error saving: " + err.message);
+      } finally {
+        saveBtn.innerText = "Save Entry";
+        saveBtn.disabled = false;
       }
     }
 
