@@ -257,7 +257,7 @@
           <button type="button" id="deleteTxModalBtn" onclick="deleteTxFromModal()" class="px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-xs font-semibold hover:bg-red-500/20 hidden">Delete</button>
           <div class="flex gap-2 ml-auto">
             <button type="button" onclick="closeTransactionModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs font-semibold">Cancel</button>
-            <button id="saveEntryBtn" type="submit" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400 disabled:opacity-50">Save Entry</button>
+            <button id="saveEntryBtn" type="submit" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400">Save Entry</button>
           </div>
         </div>
       </form>
@@ -295,8 +295,6 @@
     const db = firebase.firestore();
     const storage = firebase.storage();
 
-    db.enablePersistence().catch(err => console.log("Persistence warning:", err));
-
     let currentUser = null;
     let allTx = [];
     let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
@@ -313,7 +311,7 @@
         document.getElementById('authContainer').classList.add('hidden');
         document.getElementById('appContainer').classList.remove('hidden');
         populateCategoryDropdowns();
-        listenToData();
+        fetchDataOnce();
       } else {
         document.getElementById('authContainer').classList.remove('hidden');
         document.getElementById('appContainer').classList.add('hidden');
@@ -361,26 +359,28 @@
       }
     }
 
-    function listenToData() {
-      db.collection('expenses')
-        .where('uid', '==', currentUser.uid)
-        .onSnapshot(snapshot => {
-          allTx = [];
-          snapshot.forEach(doc => {
-            allTx.push({ id: doc.id, ...doc.data() });
-          });
-          allTx.sort((a, b) => {
-            const dateA = new Date(a.date || 0);
-            const dateB = new Date(b.date || 0);
-            if (dateB - dateA !== 0) return dateB - dateA;
-            const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
-            const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
-            return timeB - timeA;
-          });
-          updateSummary();
-          renderTable();
-          renderChart();
-        }, err => console.error("Snapshot error:", err));
+    async function fetchDataOnce() {
+      if (!currentUser) return;
+      try {
+        const snapshot = await db.collection('expenses').where('uid', '==', currentUser.uid).get();
+        allTx = [];
+        snapshot.forEach(doc => {
+          allTx.push({ id: doc.id, ...doc.data() });
+        });
+        allTx.sort((a, b) => {
+          const dateA = new Date(a.date || 0);
+          const dateB = new Date(b.date || 0);
+          if (dateB - dateA !== 0) return dateB - dateA;
+          const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+          const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+          return timeB - timeA;
+        });
+        updateSummary();
+        renderTable();
+        renderChart();
+      } catch (err) {
+        console.error("Fetch error:", err);
+      }
     }
 
     function updateSummary() {
@@ -619,13 +619,13 @@
         if (fileUrl) data.fileUrl = fileUrl;
 
         if (id) {
-          await db.collection('expenses').doc(id).update(data);
+          await db.collection('expenses').doc(id).set(data, { merge: true });
         } else {
           await db.collection('expenses').add(data);
         }
 
         closeTransactionModal();
-        location.reload(); // instant refresh and clear screen
+        await fetchDataOnce();
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving transaction: " + err.message);
@@ -642,7 +642,7 @@
         try {
           await db.collection('expenses').doc(id).delete();
           closeTransactionModal();
-          location.reload(); // instant refresh and clear screen
+          await fetchDataOnce();
         } catch (err) {
           alert("Error deleting entry: " + err.message);
         }
@@ -779,7 +779,7 @@
 
           alert(`Successfully uploaded all ${count} historical entries from Excel!`);
           document.getElementById('excelImportInput').value = '';
-          location.reload();
+          await fetchDataOnce();
         } catch (err) {
           console.error("Excel import error:", err);
           alert("Error importing Excel file. Please try again.");
