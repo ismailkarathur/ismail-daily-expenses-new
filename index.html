@@ -297,7 +297,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
     const firebaseConfig = {
@@ -312,7 +312,14 @@
 
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
-    const db = getFirestore(app);
+    
+    // Enabling offline persistence for Firestore
+    const db = initializeFirestore(app, {
+      localCache: persistentLocalCache({
+        tabManager: persistentMultipleTabManager()
+      })
+    });
+
     const storage = getStorage(app);
 
     window.auth = auth;
@@ -355,6 +362,12 @@
         try { customCategories = JSON.parse(savedCats); } catch(e){}
       }
       populateCategoryDropdowns();
+    });
+
+    // Listen to online event to auto sync offline saved entries
+    window.addEventListener('online', async () => {
+      console.log("Internet restored! Syncing offline transactions...");
+      await syncOfflineTransactions();
     });
 
     function toggleMenuDropdown(e) {
@@ -449,17 +462,30 @@
         querySnapshot.forEach((docSnap) => {
           allTx.push({ id: docSnap.id, ...docSnap.data() });
         });
+        
+        // Include any pending offline items locally
+        let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+        if(offlineData.length > 0) {
+          allTx = [...offlineData, ...allTx];
+        }
+
         allTx.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
         updateSummary();
         renderTable();
         renderChart();
       } catch (err) {
-        console.error(err);
+        console.error("Offline mode or load error:", err);
+        // Fallback to offline stored data if offline
+        let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+        allTx = offlineData;
+        updateSummary();
+        renderTable();
+        renderChart();
       }
     }
 
     async function clearAllTransactions() {
-      if (confirm("തീർച്ചയായും എല്ലാ എട്രികളും ഡിലീറ്റ് ചെയ്യണമെന്നുണ്ടോ? (Are you sure you want to delete all entries?)")) {
+      if (confirm("തീർച്ചയായും എല്ലാ എൻട്രികളും ഡിലീറ്റ് ചെയ്യണമെന്നുണ്ടോ? (Are you sure you want to delete all entries?)")) {
         try {
           const q = window.query(window.collection(window.db, "transactions"));
           const querySnapshot = await window.getDocs(q);
@@ -470,6 +496,7 @@
           });
 
           await Promise.all(deletePromises);
+          localStorage.removeItem('ismail_offline_tx');
           alert("എല്ലാ ട്രാൻസാക്ഷൻസും വിജയകരമായി ഡിലീറ്റ് ചെയ്തു!");
           loadDataFromFirebase();
         } catch (err) {
@@ -526,11 +553,11 @@
         const tr = document.createElement('tr');
         tr.className = "hover:bg-[#1a1a1a]";
         tr.innerHTML = `
-          <td class="p-2"><input type="checkbox" class="txCheckbox" value="${item.id}"></td>
+          <td class="p-2"><input type="checkbox" class="txCheckbox" value="${item.id || item.createdAt}"></td>
           <td class="p-2 text-gray-300 font-mono">${item.date}</td>
           <td class="p-2"><span class="px-2 py-0.5 bg-[#2a2a2a] text-amber-400 rounded text-[10px] font-medium">${item.category}</span></td>
           <td class="p-2 font-medium text-white">
-            ${item.title}
+            ${item.title} ${item.isOffline ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-1 rounded ml-1">Offline</span>' : ''}
             ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">📎 View File</a>` : ''}
           </td>
           <td class="p-2 text-gray-400">${item.site || '-'}</td>
@@ -538,7 +565,7 @@
             ${isInc ? '+' : '-'}₹${parseFloat(item.amount).toFixed(2)}
           </td>
           <td class="p-2 text-right space-x-2">
-            <button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>
+            ${item.id ? `<button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>` : '<span class="text-gray-500 text-[10px]">Pending Sync</span>'}
           </td>
         `;
         tbody.appendChild(tr);
@@ -661,21 +688,68 @@
           fileUrl = await window.getDownloadURL(snapshot.ref);
         }
 
-        const dataPayload = { title, amount, category, date, site, type, fileUrl };
+        const dataPayload = { title, amount, category, date, site, type, fileUrl, createdAt: Date.now() };
+
+        // Handle Offline State Saving
+        if (!navigator.onLine && !id) {
+          dataPayload.isOffline = true;
+          let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+          offlineData.push(dataPayload);
+          localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+
+          closeTransactionModal();
+          loadDataFromFirebase();
+          alert("ഇന്റർനെറ്റ് ഇല്ല! ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തിട്ടുണ്ട്. നെറ്റ് കണക്ഷൻ വരുമ്പോൾ ഓട്ടോമാറ്റിക്കായി സിങ്ക് ആകും.");
+          return;
+        }
 
         if (id) {
           await window.updateDoc(window.doc(window.db, "transactions", id), dataPayload);
         } else {
-          dataPayload.createdAt = Date.now();
           await window.addDoc(window.collection(window.db, "transactions"), dataPayload);
         }
         closeTransactionModal();
         loadDataFromFirebase();
       } catch (err) {
-        alert("Error saving: " + err.message);
+        // Fallback to offline storage if network request fails abruptly
+        if (!id) {
+          const dataPayload = { title, amount, category, date, site, type, fileUrl: '', createdAt: Date.now(), isOffline: true };
+          let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+          offlineData.push(dataPayload);
+          localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+          closeTransactionModal();
+          loadDataFromFirebase();
+          alert("നെറ്റ്വർക്ക് പ്രശ്നം മൂലമുള്ള എയർ ഒഴിവാക്കാൻ ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തു. നെറ്റ് വരുമ്പോൾ സിങ്ക് ആകും.");
+        } else {
+          alert("Error saving: " + err.message);
+        }
       } finally {
         saveBtn.innerText = "Save Entry";
         saveBtn.disabled = false;
+      }
+    }
+
+    // Function to sync offline entries when internet reconnects
+    async function syncOfflineTransactions() {
+      let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+      if (offlineData.length === 0) return;
+
+      let remainingOffline = [];
+      for (let item of offlineData) {
+        try {
+          delete item.isOffline;
+          await window.addDoc(window.collection(window.db, "transactions"), item);
+        } catch (err) {
+          console.error("Sync failed for item, will retry:", err);
+          item.isOffline = true;
+          remainingOffline.push(item);
+        }
+      }
+
+      localStorage.setItem('ismail_offline_tx', JSON.stringify(remainingOffline));
+      loadDataFromFirebase();
+      if(remainingOffline.length === 0) {
+        console.log("All offline transactions synced successfully to Firebase!");
       }
     }
 
@@ -699,10 +773,9 @@
 
     function getSelectedItems() {
       const selectedIds = Array.from(document.querySelectorAll('.txCheckbox:checked')).map(cb => cb.value);
-      return allTx.filter(t => selectedIds.includes(t.id));
+      return allTx.filter(t => selectedIds.includes(t.id) || selectedIds.includes(String(t.createdAt)));
     }
 
-    // Updated Excel Importer to correctly separate Income and Expense based on columns
     function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -717,14 +790,12 @@
             const worksheet = workbook.Sheets[sheetName];
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
             
-            // Find header row or process rows
             let headerIdx = -1;
             let colMap = {};
 
             for (let i = 0; i < rows.length; i++) {
               const r = rows[i];
               if (!r) continue;
-              // Check if this row contains header keywords
               const rowStr = r.map(c => String(c).toLowerCase());
               if (rowStr.some(s => s.includes('date') || s.includes('description') || s.includes('income') || s.includes('expense'))) {
                 headerIdx = i;
@@ -746,7 +817,6 @@
               const r = rows[i];
               if (!r || r.length === 0) continue;
 
-              // Extract values based on detected columns or fallback layout
               let dateStr = '', title = '', category = 'Others', site = '', incomeAmt = 0, expenseAmt = 0;
 
               if (Object.keys(colMap).length > 0) {
@@ -757,20 +827,14 @@
                 incomeAmt = parseFloat(String(r[colMap.income] || '0').replace(/[^0-9.]/g, '')) || 0;
                 expenseAmt = parseFloat(String(r[colMap.expense] || '0').replace(/[^0-9.]/g, '')) || 0;
               } else {
-                // Fallback standard format assumption: Date, Description, Category, Site, Income, Expense
                 dateStr = String(r[0] || new Date().toISOString().slice(0,10)).slice(0,10);
                 title = String(r[1] || 'Excel Import');
                 category = String(r[2] || 'Others');
                 site = String(r[3] || '');
                 incomeAmt = parseFloat(String(r[4] || '0').replace(/[^0-9.]/g, '')) || 0;
                 expenseAmt = parseFloat(String(r[5] || r[4] || '0').replace(/[^0-9.]/g, '')) || 0;
-                // If only 1 amount column exists and no specific income column
-                if (r.length === 5 && incomeAmt === 0) {
-                  expenseAmt = incomeAmt;
-                }
               }
 
-              // Clean up date format if needed
               if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
 
               if (incomeAmt > 0) {
