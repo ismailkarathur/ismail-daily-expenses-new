@@ -299,7 +299,7 @@
 
     let currentUser = null;
     let allTx = [];
-    let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others'];
+    let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
     let chartInstance = null;
 
     const savedCats = localStorage.getItem('ismail_custom_cats');
@@ -365,6 +365,7 @@
       db.collection('expenses')
         .where('uid', '==', currentUser.uid)
         .orderBy('date', 'desc')
+        .orderBy('updatedAt', 'desc')
         .onSnapshot(snapshot => {
           allTx = [];
           snapshot.forEach(doc => {
@@ -373,7 +374,20 @@
           updateSummary();
           renderTable();
           renderChart();
-        }, err => console.error("Snapshot error:", err));
+        }, err => {
+          console.error("Snapshot error:", err);
+          // Fallback if composite index is building
+          db.collection('expenses')
+            .where('uid', '==', currentUser.uid)
+            .onSnapshot(snap2 => {
+              allTx = [];
+              snap2.forEach(doc => allTx.push({ id: doc.id, ...doc.data() }));
+              allTx.sort((a, b) => new Date(b.date) - new Date(a.date));
+              updateSummary();
+              renderTable();
+              renderChart();
+            });
+        });
     }
 
     function updateSummary() {
@@ -544,7 +558,6 @@
       document.getElementById('txModal').classList.add('hidden'); 
     }
 
-    // --- AUTOMATIC IMAGE COMPRESSION FOR FAST UPLOAD ---
     async function compressImage(file) {
       if (!file || !file.type.startsWith('image/')) return file;
       return new Promise((resolve) => {
@@ -648,7 +661,7 @@
       return allTx.filter(t => selectedIds.includes(t.id));
     }
 
-    // --- ENHANCED EXCEL IMPORT FUNCTION ---
+    // --- ROBUST EXCEL IMPORT FUNCTION ---
     function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -694,47 +707,59 @@
               }
             }
 
-            if (headerIdx !== -1 && colMap.date !== -1) {
-              for (let i = headerIdx + 1; i < rows.length; i++) {
+            // Fallback header index if explicit header keywords not matched
+            if (headerIdx === -1) {
+              for (let i = 0; i < rows.length; i++) {
                 const r = rows[i];
-                if (!r || !r[colMap.date]) continue;
-
-                let dateStr = String(r[colMap.date]).trim();
-                if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
-
-                const title = colMap.title !== -1 && r[colMap.title] ? String(r[colMap.title]).trim() : 'Excel Import';
-                const category = colMap.category !== -1 && r[colMap.category] ? String(r[colMap.category]).trim() : 'Others';
-                const site = colMap.site !== -1 && r[colMap.site] ? String(r[colMap.site]).trim() : '';
-
-                let incVal = colMap.income !== -1 && r[colMap.income] ? parseFloat(String(r[colMap.income]).replace(/[^0-9.]/g, '')) || 0 : 0;
-                let expVal = colMap.expense !== -1 && r[colMap.expense] ? parseFloat(String(r[colMap.expense]).replace(/[^0-9.]/g, '')) || 0 : 0;
-                let amtVal = colMap.amount !== -1 && r[colMap.amount] ? parseFloat(String(r[colMap.amount]).replace(/[^0-9.]/g, '')) || 0 : 0;
-
-                let entryType = 'Expense';
-                let finalAmount = 0;
-
-                if (incVal > 0) {
-                  entryType = 'Income';
-                  finalAmount = incVal;
-                } else if (expVal > 0) {
-                  entryType = 'Expense';
-                  finalAmount = expVal;
-                } else if (amtVal > 0) {
-                  finalAmount = amtVal;
+                if (r && r.length >= 5 && String(r[0]).match(/\d{4}-\d{2}-\d{2}/)) {
+                  headerIdx = i - 1;
+                  colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5, amount: -1, type: -1 };
+                  break;
                 }
+              }
+            }
 
-                if (finalAmount > 0 && dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                  extractedEntries.push({
-                    title: title,
-                    amount: finalAmount,
-                    category: category,
-                    date: dateStr,
-                    site: site,
-                    type: entryType,
-                    uid: currentUser.uid,
-                    updatedAt: new Date()
-                  });
-                }
+            const searchStart = headerIdx !== -1 ? headerIdx + 1 : 0;
+            for (let i = searchStart; i < rows.length; i++) {
+              const r = rows[i];
+              if (!r || r.length === 0) continue;
+
+              let rawDate = colMap.date !== -1 && colMap.date < r.length ? r[colMap.date] : r[0];
+              if (!rawDate) continue;
+
+              let dateStr = String(rawDate).trim();
+              if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
+              if (!dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
+
+              const title = colMap.title !== -1 && colMap.title < r.length && r[colMap.title] ? String(r[colMap.title]).trim() : (r[1] ? String(r[1]).trim() : 'Excel Import');
+              const category = colMap.category !== -1 && colMap.category < r.length && r[colMap.category] ? String(r[colMap.category]).trim() : (r[2] ? String(r[2]).trim() : 'Others');
+              const site = colMap.site !== -1 && colMap.site < r.length && r[colMap.site] ? String(r[colMap.site]).trim() : (r[3] ? String(r[3]).trim() : '');
+
+              let incVal = colMap.income !== -1 && colMap.income < r.length && r[colMap.income] ? parseFloat(String(r[colMap.income]).replace(/[^0-9.]/g, '')) || 0 : (r[4] ? parseFloat(String(r[4]).replace(/[^0-9.]/g, '')) || 0 : 0);
+              let expVal = colMap.expense !== -1 && colMap.expense < r.length && r[colMap.expense] ? parseFloat(String(r[colMap.expense]).replace(/[^0-9.]/g, '')) || 0 : (r[5] ? parseFloat(String(r[5]).replace(/[^0-9.]/g, '')) || 0 : 0);
+
+              let entryType = 'Expense';
+              let finalAmount = 0;
+
+              if (incVal > 0) {
+                entryType = 'Income';
+                finalAmount = incVal;
+              } else if (expVal > 0) {
+                entryType = 'Expense';
+                finalAmount = expVal;
+              }
+
+              if (finalAmount > 0) {
+                extractedEntries.push({
+                  title: title,
+                  amount: finalAmount,
+                  category: category,
+                  date: dateStr,
+                  site: site,
+                  type: entryType,
+                  uid: currentUser.uid,
+                  updatedAt: new Date()
+                });
               }
             }
           });
