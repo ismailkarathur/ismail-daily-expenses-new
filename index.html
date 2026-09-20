@@ -248,7 +248,7 @@
           </div>
         </div>
 
-        <div>
+        <div id="txFileContainer">
           <label class="block text-xs font-medium text-gray-400 mb-1">Attachment (Camera / Photos / PDF Docs)</label>
           <input type="file" id="txFile" accept="image/*,.pdf,application/pdf" capture="environment" class="w-full text-xs text-gray-400 border border-[#333] p-2 rounded-xl bg-[#121212]">
         </div>
@@ -492,12 +492,16 @@
       document.getElementById('deleteTxModalBtn').classList.add('hidden');
 
       const siteContainer = document.getElementById('txSiteContainer');
+      const fileContainer = document.getElementById('txFileContainer');
+
       if (type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Add Income';
         siteContainer.style.display = 'none';
+        fileContainer.style.display = 'none';
       } else {
         document.getElementById('txModalTitle').innerText = 'Add Expense';
         siteContainer.style.display = 'block';
+        fileContainer.style.display = 'block';
       }
 
       document.getElementById('txModal').classList.remove('hidden');
@@ -517,13 +521,17 @@
       document.getElementById('deleteTxModalBtn').classList.remove('hidden');
 
       const siteContainer = document.getElementById('txSiteContainer');
+      const fileContainer = document.getElementById('txFileContainer');
+
       if (item.type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Edit Income';
         siteContainer.style.display = 'none';
+        fileContainer.style.display = 'none';
         document.getElementById('txSite').value = '';
       } else {
         document.getElementById('txModalTitle').innerText = 'Edit Expense';
         siteContainer.style.display = 'block';
+        fileContainer.style.display = 'block';
         document.getElementById('txSite').value = item.site || '';
       }
 
@@ -538,7 +546,7 @@
 
     // --- AUTOMATIC IMAGE COMPRESSION FOR FAST UPLOAD ---
     async function compressImage(file) {
-      if (!file.type.startsWith('image/')) return file;
+      if (!file || !file.type.startsWith('image/')) return file;
       return new Promise((resolve) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -565,7 +573,9 @@
               resolve(new File([blob], file.name, { type: 'image/jpeg' }));
             }, 'image/jpeg', 0.7);
           };
+          img.onerror = () => resolve(file);
         };
+        reader.onerror = () => resolve(file);
       });
     }
 
@@ -587,9 +597,8 @@
         const fileInput = document.getElementById('txFile');
 
         let fileUrl = '';
-        if (fileInput.files[0]) {
+        if (type === 'Expense' && fileInput.files && fileInput.files[0]) {
           let file = fileInput.files[0];
-          // Compress photo for ultra fast saving
           file = await compressImage(file);
           
           const storageRef = storage.ref(`receipts/${currentUser.uid}/${Date.now()}_${file.name}`);
