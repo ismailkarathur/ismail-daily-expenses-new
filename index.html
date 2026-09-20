@@ -1,10 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Daily Expense Tracker</title>
+  <title>Ismail Expense Manager</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#121212',
+              card: '#1e1e1e',
+              border: '#2a2a2a',
+              accent: '#f59e0b',
+              income: '#22c55e',
+              expense: '#ef4444'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Firebase SDKs -->
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
@@ -14,177 +35,239 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
-<body class="bg-slate-100 text-slate-800 antialiased">
+<body class="bg-[#121212] text-amber-50 min-h-screen font-sans antialiased pb-10">
 
-  <!-- Auth Screen (Login / Forgot Password) -->
+  <!-- Auth Screen -->
   <div id="authContainer" class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+    <div class="bg-[#1e1e1e] p-8 rounded-2xl border border-[#2a2a2a] max-w-md w-full shadow-2xl">
       <div class="text-center mb-6">
-        <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-2">₹</div>
-        <h2 class="text-2xl font-bold">Expense Tracker Login</h2>
+        <div class="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-black text-3xl font-extrabold mx-auto mb-3 shadow-lg">₹</div>
+        <h2 class="text-2xl font-bold text-white">Ismail Expense Manager</h2>
+        <p class="text-xs text-amber-500/80 mt-1">Sign in to manage your cash flow</p>
       </div>
       
       <form id="loginForm" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium mb-1">Email</label>
-          <input type="email" id="loginEmail" required class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+          <label class="block text-xs font-medium text-gray-400 mb-1">Email Address</label>
+          <input type="email" id="loginEmail" required class="w-full p-3 bg-[#121212] border border-[#333] rounded-xl text-white focus:border-amber-500 outline-none">
         </div>
         <div>
-          <label class="block text-sm font-medium mb-1">Password</label>
-          <input type="password" id="loginPassword" required class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+          <label class="block text-xs font-medium text-gray-400 mb-1">Password</label>
+          <input type="password" id="loginPassword" required class="w-full p-3 bg-[#121212] border border-[#333] rounded-xl text-white focus:border-amber-500 outline-none">
         </div>
-        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700">Login</button>
+        <button type="submit" class="w-full bg-amber-500 text-black py-3 rounded-xl font-bold hover:bg-amber-400 transition">Login</button>
       </form>
 
-      <div class="mt-4 text-center text-sm">
-        <button onclick="handleForgotPassword()" class="text-blue-600 hover:underline">Forgot Password?</button>
+      <div class="mt-4 text-center text-xs">
+        <button onclick="handleForgotPassword()" class="text-amber-500 hover:underline">Forgot Password?</button>
       </div>
     </div>
   </div>
 
   <!-- Main Dashboard -->
-  <div id="appContainer" class="hidden min-h-screen flex flex-col">
-    <!-- Header -->
-    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">₹</div>
-        <h1 class="text-xl font-bold">Daily Expense Tracker</h1>
+  <div id="appContainer" class="hidden max-w-2xl mx-auto px-4 py-6 space-y-6">
+    
+    <!-- Top Header Profile Section -->
+    <div class="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-white tracking-wide">Ismail Expense Manager</h1>
+        <p class="text-xs text-amber-500/90 mt-0.5">Owner: <span class="font-semibold text-white">Ismail vk</span> • Role: <span class="font-semibold text-amber-400">Admin</span></p>
       </div>
-      <div class="flex items-center space-x-2">
-        <button onclick="openChangePasswordModal()" class="text-xs bg-blue-700 px-3 py-1.5 rounded hover:bg-blue-800">Change Password</button>
-        <button onclick="logout()" class="text-xs bg-red-600 px-3 py-1.5 rounded hover:bg-red-700">Logout</button>
+      <div class="flex gap-2">
+        <button onclick="openCategoryModal()" class="text-xs bg-[#2a2a2a] text-amber-400 px-3 py-2 rounded-xl border border-amber-500/20 hover:bg-amber-500/10 font-medium">+ Category</button>
+        <button onclick="logout()" class="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-2 rounded-xl hover:bg-red-500/20">Logout</button>
       </div>
-    </header>
+    </div>
 
-    <!-- Main Content -->
-    <main class="flex-1 p-4 max-w-7xl mx-auto w-full space-y-6">
-      
-      <!-- Top Actions Bar -->
-      <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm">
-        <button onclick="openExpenseModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center gap-2">
-          <span>+</span> Add Expense
+    <!-- Main Balance Card -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 shadow-xl space-y-5">
+      <div>
+        <span class="text-xs text-amber-500/80 uppercase font-bold tracking-wider">AVAILABLE BALANCE</span>
+        <div id="availableBalanceText" class="text-3xl font-black text-amber-400 mt-1">₹0.00</div>
+      </div>
+
+      <!-- Grid Cards -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">INCOME</span>
+          <div id="totalIncomeText" class="text-lg font-bold text-green-400 mt-0.5">₹0.00</div>
+        </div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">EXPENSES</span>
+          <div id="totalExpenseText" class="text-lg font-bold text-amber-500 mt-0.5">₹0.00</div>
+        </div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">TRANSACTIONS</span>
+          <div id="totalTxCountText" class="text-lg font-bold text-white mt-0.5">0</div>
+        </div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">TOP CATEGORY</span>
+          <div id="topCategoryText" class="text-lg font-bold text-white mt-0.5">-</div>
+        </div>
+      </div>
+
+      <!-- Add Action Buttons -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button onclick="openTransactionModal('Expense')" class="bg-amber-500 hover:bg-amber-400 text-black py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg">
+          <span>-</span> Add Expense
         </button>
+        <button onclick="openTransactionModal('Income')" class="bg-[#2a2a2a] hover:bg-[#333] text-white py-3 rounded-xl font-bold border border-[#3a3a3a] flex items-center justify-center gap-2">
+          <span>+</span> Add Income
+        </button>
+      </div>
+    </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <button onclick="shareSelectedWhatsApp()" class="bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600">
-            WhatsApp Share Selected
+    <!-- Weekly Cashflow Chart -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 space-y-3">
+      <h3 class="text-sm font-bold text-white">Weekly cash flow</h3>
+      <div class="h-40 w-full">
+        <canvas id="cashflowChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Action Bar & Filters -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-4 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#2a2a2a] pb-3">
+        <h3 class="text-sm font-bold text-white">Transactions History</h3>
+        <div class="flex gap-2">
+          <button onclick="shareSelectedJPEG()" class="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-500/30 flex items-center gap-1">
+            📷 Share JPEG
           </button>
-          <button onclick="generateJPEGReport()" class="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">
-            JPEG Report
+          <button onclick="exportExcel()" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-500/30">
+            📊 Excel
           </button>
-          <button onclick="exportToExcel()" class="bg-slate-700 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800">
-            Export Excel/CSV
-          </button>
-          <label class="bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 cursor-pointer">
-            Restore Backup
-            <input type="file" id="restoreInput" onchange="restoreBackup(event)" accept=".json" class="hidden">
-          </label>
         </div>
       </div>
 
-      <!-- Filters Section -->
-      <div class="bg-white p-4 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Search Keyword</label>
-          <input type="text" id="filterKeyword" oninput="applyFilters()" placeholder="Title, Category..." class="w-full p-2 border rounded-lg text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">Category</label>
-          <select id="filterCategory" onchange="applyFilters()" class="w-full p-2 border rounded-lg text-sm">
-            <option value="">All Categories</option>
-            <option value="Food">Food</option>
-            <option value="Travel">Travel</option>
-            <option value="Bills">Bills</option>
-            <option value="Shopping">Shopping</option>
-            <option value="Others">Others</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">From Date</label>
-          <input type="date" id="filterFromDate" onchange="applyFilters()" class="w-full p-2 border rounded-lg text-sm">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-slate-500 mb-1">To Date</label>
-          <input type="date" id="filterToDate" onchange="applyFilters()" class="w-full p-2 border rounded-lg text-sm">
-        </div>
+      <!-- Filters -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <input type="text" id="filterKeyword" oninput="renderTable()" placeholder="Search..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+        <select id="filterCategory" onchange="renderTable()" class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+          <option value="">All Categories</option>
+        </select>
+        <input type="date" id="filterFromDate" onchange="renderTable()" class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+        <input type="date" id="filterToDate" onchange="renderTable()" class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
       </div>
 
       <!-- Table Section -->
-      <div id="reportContainer" class="bg-white rounded-xl shadow-sm overflow-hidden p-4">
-        <div class="flex justify-between items-center mb-4">
-          <h3 class="font-bold text-lg">Expense History (Latest First)</h3>
-          <span id="totalAmountText" class="font-semibold text-blue-600">Total: ₹0</span>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-slate-50 border-b text-xs font-semibold text-slate-600 uppercase">
-                <th class="p-3"><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
-                <th class="p-3">Date</th>
-                <th class="p-3">Title</th>
-                <th class="p-3">Category</th>
-                <th class="p-3">Amount</th>
-                <th class="p-3">Attachment</th>
-                <th class="p-3 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="expenseTableBody" class="divide-y text-sm">
-              <!-- Dynamic entries -->
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Pagination -->
-        <div class="flex justify-between items-center mt-4 pt-4 border-t text-sm">
-          <button onclick="prevPage()" id="btnPrev" class="px-3 py-1 bg-slate-200 rounded disabled:opacity-50">Previous</button>
-          <span id="pageIndicator" class="text-slate-600">Page 1</span>
-          <button onclick="nextPage()" id="btnNext" class="px-3 py-1 bg-slate-200 rounded disabled:opacity-50">Next</button>
-        </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-gray-400 border-b border-[#2a2a2a] uppercase">
+              <th class="p-2"><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+              <th class="p-2">Date</th>
+              <th class="p-2">Category</th>
+              <th class="p-2">Description</th>
+              <th class="p-2">Site/Project</th>
+              <th class="p-2">Amount</th>
+              <th class="p-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="txTableBody" class="divide-y divide-[#2a2a2a]">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
       </div>
-
-    </main>
+    </div>
   </div>
 
-  <!-- Add/Edit Modal -->
-  <div id="expenseModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl max-w-lg w-full p-6 space-y-4">
-      <h3 id="modalTitle" class="text-xl font-bold">Add Expense</h3>
-      <form id="expenseForm" onsubmit="saveExpense(event)" class="space-y-3">
+  <!-- Hidden Printable/Capture View for JPEG Report (Matching Image 2 Table Format) -->
+  <div class="hidden">
+    <div id="jpegReportContainer" class="bg-white text-black p-6 w-[800px] font-sans">
+      <div class="border-b-2 border-black pb-3 mb-4">
+        <h2 class="text-2xl font-black uppercase tracking-tight">TICKED TRANSACTIONS</h2>
+        <div id="reportSubHeader" class="text-xs text-gray-600 font-semibold mt-1">Report Generated</div>
+      </div>
+
+      <table class="w-full text-left border-collapse border border-black text-xs">
+        <thead>
+          <tr class="bg-gray-100 border-b border-black font-bold">
+            <th class="border border-black p-2 text-center">Date</th>
+            <th class="border border-black p-2">Category</th>
+            <th class="border border-black p-2">Description</th>
+            <th class="border border-black p-2">Site / project</th>
+            <th class="border border-black p-2 text-right text-green-700">Income (₹)</th>
+            <th class="border border-black p-2 text-right text-red-700">Expense (₹)</th>
+            <th class="border border-black p-2 text-right">Balance (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="reportTableBody">
+          <!-- Rows inserted dynamically -->
+        </tbody>
+        <tfoot>
+          <tr class="font-bold bg-gray-50 border-t-2 border-black">
+            <td colspan="4" class="border border-black p-2 text-right uppercase">TOTAL</td>
+            <td id="reportTotalIncome" class="border border-black p-2 text-right text-green-700">0.00</td>
+            <td id="reportTotalExpense" class="border border-black p-2 text-right text-red-700">0.00</td>
+            <td id="reportFinalBalance" class="border border-black p-2 text-right">0.00</td>
+          </tr>
+        </tfoot>
+      </table>
+      <p class="text-[10px] text-gray-500 mt-3 italic">* Selected ticked transactions summary report</p>
+    </div>
+  </div>
+
+  <!-- Transaction Modal -->
+  <div id="txModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <h3 id="txModalTitle" class="text-lg font-bold text-white">Add Entry</h3>
+      <form id="txForm" onsubmit="saveTransaction(event)" class="space-y-3">
         <input type="hidden" id="editDocId">
+        <input type="hidden" id="txType" value="Expense">
+        
         <div>
-          <label class="block text-sm font-medium mb-1">Title</label>
-          <input type="text" id="expenseTitle" required class="w-full p-2 border rounded-lg">
+          <label class="block text-xs font-medium text-gray-400 mb-1">Description / Title</label>
+          <input type="text" id="txTitle" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
         </div>
+
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label class="block text-sm font-medium mb-1">Amount (₹)</label>
-            <input type="number" step="0.01" id="expenseAmount" required class="w-full p-2 border rounded-lg">
+            <label class="block text-xs font-medium text-gray-400 mb-1">Amount (₹)</label>
+            <input type="number" step="0.01" id="txAmount" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
           </div>
           <div>
-            <label class="block text-sm font-medium mb-1">Category</label>
-            <select id="expenseCategory" required class="w-full p-2 border rounded-lg">
-              <option value="Food">Food</option>
-              <option value="Travel">Travel</option>
-              <option value="Bills">Bills</option>
-              <option value="Shopping">Shopping</option>
-              <option value="Others">Others</option>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Category</label>
+            <select id="txCategory" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+              <!-- Dynamic options -->
             </select>
           </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">Date</label>
-          <input type="date" id="expenseDate" required class="w-full p-2 border rounded-lg">
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Date</label>
+            <input type="date" id="txDate" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Site / Project</label>
+            <input type="text" id="txSite" placeholder="e.g. Modar, Recharge" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+          </div>
         </div>
+
         <div>
-          <label class="block text-sm font-medium mb-1">Receipt / Attachment</label>
-          <input type="file" id="expenseFile" accept="image/*,application/pdf" capture="environment" class="w-full text-sm">
+          <label class="block text-xs font-medium text-gray-400 mb-1">Attachment / Receipt File</label>
+          <input type="file" id="txFile" accept="image/*,application/pdf" class="w-full text-xs text-gray-400">
         </div>
-        <div class="flex justify-end space-x-2 pt-4">
-          <button type="button" onclick="closeExpenseModal()" class="px-4 py-2 border rounded-lg">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Save Expense</button>
+
+        <div class="flex justify-end gap-2 pt-3">
+          <button type="button" onclick="closeTransactionModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs font-semibold">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400">Save Entry</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- Add Category Modal -->
+  <div id="categoryModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <h3 class="text-lg font-bold text-white">Add New Category</h3>
+      <div class="space-y-3">
+        <input type="text" id="newCategoryName" placeholder="Category Name" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+        <div class="flex justify-end gap-2">
+          <button onclick="closeCategoryModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs">Cancel</button>
+          <button onclick="saveNewCategory()" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs">Add Category</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -199,25 +282,32 @@
       appId: "1:416995024743:web:b8ad4d4ac2aecc1e53d9c2",
       measurementId: "G-DC3HQ68C7T"
     };
-    
+
     firebase.initializeApp(firebaseConfig);
     const auth = firebase.auth();
     const db = firebase.firestore();
     const storage = firebase.storage();
 
-    db.enablePersistence().catch(err => console.log("Persistence error:", err));
+    db.enablePersistence().catch(err => console.log("Persistence warning:", err));
 
     let currentUser = null;
-    let allExpenses = [];
-    let currentPage = 1;
-    const pageSize = 50;
+    let allTx = [];
+    let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others'];
+    let chartInstance = null;
+
+    // Load saved categories from localStorage
+    const savedCats = localStorage.getItem('ismail_custom_cats');
+    if (savedCats) {
+      try { customCategories = JSON.parse(savedCats); } catch(e){}
+    }
 
     auth.onAuthStateChanged(user => {
       currentUser = user;
       if (user) {
         document.getElementById('authContainer').classList.add('hidden');
         document.getElementById('appContainer').classList.remove('hidden');
-        listenToExpenses();
+        populateCategoryDropdowns();
+        listenToData();
       } else {
         document.getElementById('authContainer').classList.remove('hidden');
         document.getElementById('appContainer').classList.add('hidden');
@@ -232,108 +322,181 @@
     });
 
     function handleForgotPassword() {
-      const email = prompt("Enter your email for password reset:");
+      const email = prompt("Enter your email for reset:");
       if (email) auth.sendPasswordResetEmail(email).then(() => alert("Reset email sent!")).catch(err => alert(err.message));
-    }
-
-    function openChangePasswordModal() {
-      const newPass = prompt("Enter your new password:");
-      if (newPass && auth.currentUser) {
-        auth.currentUser.updatePassword(newPass).then(() => alert("Password updated successfully!")).catch(err => alert(err.message));
-      }
     }
 
     function logout() { auth.signOut(); }
 
-    function listenToExpenses() {
+    function populateCategoryDropdowns() {
+      const txCat = document.getElementById('txCategory');
+      const filterCat = document.getElementById('filterCategory');
+
+      txCat.innerHTML = '';
+      filterCat.innerHTML = '<option value="">All Categories</option>';
+
+      customCategories.forEach(cat => {
+        txCat.innerHTML += `<option value="${cat}">${cat}</option>`;
+        filterCat.innerHTML += `<option value="${cat}">${cat}</option>`;
+      });
+    }
+
+    function openCategoryModal() { document.getElementById('categoryModal').classList.remove('hidden'); }
+    function closeCategoryModal() { document.getElementById('categoryModal').classList.add('hidden'); }
+
+    function saveNewCategory() {
+      const name = document.getElementById('newCategoryName').value.trim();
+      if (name && !customCategories.includes(name)) {
+        customCategories.push(name);
+        localStorage.setItem('ismail_custom_cats', JSON.stringify(customCategories));
+        populateCategoryDropdowns();
+        document.getElementById('newCategoryName').value = '';
+        closeCategoryModal();
+      }
+    }
+
+    function listenToData() {
       db.collection('expenses')
         .where('uid', '==', currentUser.uid)
         .orderBy('date', 'desc')
         .onSnapshot(snapshot => {
-          allExpenses = [];
+          allTx = [];
           snapshot.forEach(doc => {
-            allExpenses.push({ id: doc.id, ...doc.data() });
+            allTx.push({ id: doc.id, ...doc.data() });
           });
+          updateSummary();
           renderTable();
-        }, err => {
-          console.error("Firestore snapshot error:", err);
-        });
+          renderChart();
+        }, err => console.error("Snapshot error:", err));
+    }
+
+    function updateSummary() {
+      let income = 0;
+      let expense = 0;
+      let catCounts = {};
+
+      allTx.forEach(t => {
+        const amt = parseFloat(t.amount || 0);
+        if (t.type === 'Income') {
+          income += amt;
+        } else {
+          expense += amt;
+          catCounts[t.category] = (catCounts[t.category] || 0) + amt;
+        }
+      });
+
+      const balance = income - expense;
+      document.getElementById('availableBalanceText').innerText = `₹${balance.toFixed(2)}`;
+      document.getElementById('totalIncomeText').innerText = `₹${income.toFixed(2)}`;
+      document.getElementById('totalExpenseText').innerText = `₹${expense.toFixed(2)}`;
+      document.getElementById('totalTxCountText').innerText = allTx.length;
+
+      let topCat = '-';
+      let maxVal = 0;
+      for (const [cat, val] of Object.entries(catCounts)) {
+        if (val > maxVal) { maxVal = val; topCat = cat; }
+      }
+      document.getElementById('topCategoryText').innerText = topCat;
     }
 
     function renderTable() {
-      const tbody = document.getElementById('expenseTableBody');
+      const tbody = document.getElementById('txTableBody');
       tbody.innerHTML = '';
 
-      const filtered = getFilteredData();
-      
-      const total = filtered.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-      document.getElementById('totalAmountText').innerText = `Total: ₹${total.toFixed(2)}`;
+      const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+      const catFilter = document.getElementById('filterCategory').value;
+      const fromDate = document.getElementById('filterFromDate').value;
+      const toDate = document.getElementById('filterToDate').value;
 
-      const start = (currentPage - 1) * pageSize;
-      const paginatedData = filtered.slice(start, start + pageSize);
+      const filtered = allTx.filter(item => {
+        const matchesKw = (item.title || '').toLowerCase().includes(keyword) || (item.category || '').toLowerCase().includes(keyword) || (item.site || '').toLowerCase().includes(keyword);
+        const matchesCat = !catFilter || item.category === catFilter;
+        const matchesFrom = !fromDate || item.date >= fromDate;
+        const matchesTo = !toDate || item.date <= toDate;
+        return matchesKw && matchesCat && matchesFrom && matchesTo;
+      });
 
-      paginatedData.forEach(item => {
+      filtered.forEach(item => {
+        const isInc = item.type === 'Income';
         const tr = document.createElement('tr');
-        tr.className = "hover:bg-slate-50";
+        tr.className = "hover:bg-[#1a1a1a]";
         tr.innerHTML = `
-          <td class="p-3"><input type="checkbox" class="entryCheckbox" value="${item.id}"></td>
-          <td class="p-3">${item.date}</td>
-          <td class="p-3 font-medium">${item.title}</td>
-          <td class="p-3"><span class="px-2 py-1 bg-slate-100 rounded text-xs">${item.category}</span></td>
-          <td class="p-3 font-bold text-slate-800">₹${parseFloat(item.amount).toFixed(2)}</td>
-          <td class="p-3">
-            ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-blue-600 underline text-xs">View File</a>` : '-'}
+          <td class="p-2"><input type="checkbox" class="txCheckbox" value="${item.id}"></td>
+          <td class="p-2 text-gray-300 font-mono">${item.date}</td>
+          <td class="p-2"><span class="px-2 py-0.5 bg-[#2a2a2a] text-amber-400 rounded text-[10px] font-medium">${item.category}</span></td>
+          <td class="p-2 font-medium text-white">${item.title}</td>
+          <td class="p-2 text-gray-400">${item.site || '-'}</td>
+          <td class="p-2 font-bold ${isInc ? 'text-green-400' : 'text-amber-500'}">
+            ${isInc ? '+' : '-'}₹${parseFloat(item.amount).toFixed(2)}
           </td>
-          <td class="p-3 text-right space-x-2">
-            <button onclick="editExpense('${item.id}')" class="text-blue-600 hover:underline text-xs">Edit</button>
-            <button onclick="deleteExpense('${item.id}')" class="text-red-600 hover:underline text-xs">Delete</button>
+          <td class="p-2 text-right space-x-2">
+            ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-amber-400 underline text-[10px]">File</a>` : ''}
+            <button onclick="deleteTx('${item.id}')" class="text-red-400 hover:underline text-[10px]">Delete</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
-
-      document.getElementById('pageIndicator').innerText = `Page ${currentPage} of ${Math.ceil(filtered.length / pageSize) || 1}`;
-      document.getElementById('btnPrev').disabled = currentPage === 1;
-      document.getElementById('btnNext').disabled = start + pageSize >= filtered.length;
     }
 
-    function getFilteredData() {
-      const keyword = document.getElementById('filterKeyword').value.toLowerCase();
-      const category = document.getElementById('filterCategory').value;
-      const fromDate = document.getElementById('filterFromDate').value;
-      const toDate = document.getElementById('filterToDate').value;
+    function renderChart() {
+      const ctx = document.getElementById('cashflowChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
 
-      return allExpenses.filter(item => {
-        const matchesKeyword = item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword);
-        const matchesCategory = category === '' || item.category === category;
-        const matchesFrom = !fromDate || item.date >= fromDate;
-        const matchesTo = !toDate || item.date <= toDate;
-        return matchesKeyword && matchesCategory && matchesFrom && matchesTo;
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dataVals = [0, 0, 0, 0, 0, 0, 0];
+
+      allTx.forEach(t => {
+        if (t.date) {
+          const d = new Date(t.date);
+          let dayIdx = d.getDay() - 1;
+          if (dayIdx === -1) dayIdx = 6;
+          dataVals[dayIdx] += parseFloat(t.amount || 0);
+        }
+      });
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: days,
+          datasets: [{
+            label: 'Expenses (₹)',
+            data: dataVals,
+            backgroundColor: '#f59e0b',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#888' } },
+            y: { grid: { color: '#2a2a2a' }, ticks: { color: '#888' } }
+          }
+        }
       });
     }
 
-    function applyFilters() { currentPage = 1; renderTable(); }
-    function prevPage() { if (currentPage > 1) { currentPage--; renderTable(); } }
-    function nextPage() { currentPage++; renderTable(); }
-
-    function openExpenseModal() {
+    function openTransactionModal(type) {
       document.getElementById('editDocId').value = '';
-      document.getElementById('expenseForm').reset();
-      document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
-      document.getElementById('modalTitle').innerText = "Add Expense";
-      document.getElementById('expenseModal').classList.remove('hidden');
+      document.getElementById('txForm').reset();
+      document.getElementById('txType').value = type;
+      document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('txModalTitle').innerText = type === 'Income' ? 'Add Income' : 'Add Expense';
+      document.getElementById('txModal').classList.remove('hidden');
     }
 
-    function closeExpenseModal() { document.getElementById('expenseModal').classList.add('hidden'); }
+    function closeTransactionModal() { document.getElementById('txModal').classList.add('hidden'); }
 
-    async function saveExpense(e) {
+    async function saveTransaction(e) {
       e.preventDefault();
-      const id = document.getElementById('editDocId').value;
-      const title = document.getElementById('expenseTitle').value;
-      const amount = parseFloat(document.getElementById('expenseAmount').value);
-      const category = document.getElementById('expenseCategory').value;
-      const date = document.getElementById('expenseDate').value;
-      const fileInput = document.getElementById('expenseFile');
+      const title = document.getElementById('txTitle').value;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const category = document.getElementById('txCategory').value;
+      const date = document.getElementById('txDate').value;
+      const site = document.getElementById('txSite').value;
+      const type = document.getElementById('txType').value;
+      const fileInput = document.getElementById('txFile');
 
       let fileUrl = '';
       if (fileInput.files[0]) {
@@ -343,94 +506,116 @@
         fileUrl = await snapshot.ref.getDownloadURL();
       }
 
-      const data = { title, amount, category, date, uid: currentUser.uid, updatedAt: new Date() };
+      const data = { title, amount, category, date, site, type, uid: currentUser.uid, updatedAt: new Date() };
       if (fileUrl) data.fileUrl = fileUrl;
 
-      if (id) {
-        await db.collection('expenses').doc(id).update(data);
-      } else {
-        await db.collection('expenses').add(data);
-      }
-
-      closeExpenseModal();
+      await db.collection('expenses').add(data);
+      closeTransactionModal();
     }
 
-    function editExpense(id) {
-      const item = allExpenses.find(x => x.id === id);
-      if (!item) return;
-      document.getElementById('editDocId').value = item.id;
-      document.getElementById('expenseTitle').value = item.title;
-      document.getElementById('expenseAmount').value = item.amount;
-      document.getElementById('expenseCategory').value = item.category;
-      document.getElementById('expenseDate').value = item.date;
-      document.getElementById('modalTitle').innerText = "Edit Expense";
-      document.getElementById('expenseModal').classList.remove('hidden');
-    }
-
-    async function deleteExpense(id) {
-      if (confirm("Are you sure you want to delete this expense?")) {
+    async function deleteTx(id) {
+      if (confirm("Delete this entry?")) {
         await db.collection('expenses').doc(id).delete();
       }
     }
 
-    function getSelectedEntries() {
-      const checkboxes = document.querySelectorAll('.entryCheckbox:checked');
-      const selectedIds = Array.from(checkboxes).map(cb => cb.value);
-      return allExpenses.filter(item => selectedIds.includes(item.id));
-    }
-
     function toggleSelectAll(master) {
-      document.querySelectorAll('.entryCheckbox').forEach(cb => cb.checked = master.checked);
+      document.querySelectorAll('.txCheckbox').forEach(cb => cb.checked = master.checked);
     }
 
-    function shareSelectedWhatsApp() {
-      const selected = getSelectedEntries();
-      if (selected.length === 0) return alert("Select at least one entry!");
+    function getSelectedItems() {
+      const selectedIds = Array.from(document.querySelectorAll('.txCheckbox:checked')).map(cb => cb.value);
+      return allTx.filter(t => selectedIds.includes(t.id));
+    }
 
-      let text = "*Expense Summary Report*\n\n";
-      let total = 0;
-      selected.forEach((item, idx) => {
-        text += `${idx + 1}. *${item.title}* - ₹${item.amount} (${item.date})\n`;
-        total += item.amount;
+    // --- SHARE AS JPEG (Formatted like Image 2) ---
+    async function shareSelectedJPEG() {
+      const selected = getSelectedItems();
+      if (selected.length === 0) return alert("Select at least one entry using checkboxes!");
+
+      // Sort chronological
+      selected.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const tbody = document.getElementById('reportTableBody');
+      tbody.innerHTML = '';
+
+      let totalInc = 0;
+      let totalExp = 0;
+      let runningBal = 0;
+
+      selected.forEach(item => {
+        const amt = parseFloat(item.amount || 0);
+        let incText = '-';
+        let expText = '-';
+
+        if (item.type === 'Income') {
+          incText = amt.toFixed(2);
+          totalInc += amt;
+          runningBal += amt;
+        } else {
+          expText = amt.toFixed(2);
+          totalExp += amt;
+          runningBal -= amt;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-black text-xs";
+        tr.innerHTML = `
+          <td class="border border-black p-2 text-center whitespace-nowrap font-mono">${item.date}</td>
+          <td class="border border-black p-2 capitalize">${item.category}</td>
+          <td class="border border-black p-2 font-medium">${item.title}</td>
+          <td class="border border-black p-2">${item.site || '-'}</td>
+          <td class="border border-black p-2 text-right font-mono">${incText}</td>
+          <td class="border border-black p-2 text-right font-mono">${expText}</td>
+          <td class="border border-black p-2 text-right font-mono font-bold">${runningBal.toFixed(2)}</td>
+        `;
+        tbody.appendChild(tr);
       });
-      text += `\n*Total:* ₹${total.toFixed(2)}`;
 
-      const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
-      window.open(waUrl, '_blank');
+      document.getElementById('reportTotalIncome').innerText = totalInc.toFixed(2);
+      document.getElementById('reportTotalExpense').innerText = totalExp.toFixed(2);
+      document.getElementById('reportFinalBalance').innerText = runningBal.toFixed(2);
+      document.getElementById('reportSubHeader').innerText = `${selected.length} ticked entries summary report`;
+
+      // Render to Image
+      const reportElem = document.getElementById('jpegReportContainer');
+      reportElem.parentElement.classList.remove('hidden');
+
+      const canvas = await html2canvas(reportElem, { scale: 2 });
+      reportElem.parentElement.classList.add('hidden');
+
+      canvas.toBlob(async (blob) => {
+        const fileName = `Expense_Report_${new Date().toISOString().slice(0,10)}.jpg`;
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Ticked Expense Report',
+              text: 'Expense summary report image attached.'
+            });
+          } catch (err) {
+            console.log("Share canceled/failed:", err);
+          }
+        } else {
+          // Fallback download image & open WhatsApp share link
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = fileName;
+          link.click();
+          alert("JPEG image downloaded! Opening WhatsApp...");
+          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("Please find the attached expense report JPEG image.")}`);
+        }
+      }, 'image/jpeg', 0.95);
     }
 
-    function generateJPEGReport() {
-      const container = document.getElementById('reportContainer');
-      html2canvas(container).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `Expense_Report_${new Date().toISOString().slice(0,10)}.jpg`;
-        link.href = canvas.toDataURL('image/jpeg');
-        link.click();
-      });
-    }
-
-    function exportToExcel() {
-      const filtered = getFilteredData();
-      const ws = XLSX.utils.json_to_sheet(filtered);
+    function exportExcel() {
+      const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
+      const ws = XLSX.utils.json_to_sheet(selected);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-      XLSX.writeFile(wb, `Expenses_Backup_${new Date().toISOString().slice(0,10)}.xlsx`);
-    }
-
-    function restoreBackup(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        const data = JSON.parse(evt.target.result);
-        for (const item of data) {
-          delete item.id;
-          item.uid = currentUser.uid;
-          await db.collection('expenses').add(item);
-        }
-        alert("Backup restored successfully!");
-      };
-      reader.readAsText(file);
+      XLSX.writeFile(wb, `Ismail_Expenses_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
   </script>
 </body>
