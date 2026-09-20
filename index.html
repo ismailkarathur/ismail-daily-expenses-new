@@ -855,11 +855,12 @@
             let headerIdx = -1;
             let colMap = {};
 
+            // Intelligent header detection
             for (let i = 0; i < rows.length; i++) {
               const r = rows[i];
               if (!r) continue;
               const rowStr = r.map(c => String(c).toLowerCase());
-              if (rowStr.some(s => s.includes('date') || s.includes('income') || s.includes('expense'))) {
+              if (rowStr.some(s => s.includes('date') || s.includes('income') || s.includes('expense') || s.includes('description'))) {
                 headerIdx = i;
                 r.forEach((colName, idx) => {
                   const name = String(colName).toLowerCase();
@@ -874,6 +875,12 @@
               }
             }
 
+            // Fallback if explicit header names weren't found perfectly
+            if (headerIdx === -1 && rows.length > 4) {
+              headerIdx = 4; // Default based on standard template row 4
+              colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5 };
+            }
+
             const startRow = headerIdx !== -1 ? headerIdx + 1 : 0;
             for (let i = startRow; i < rows.length; i++) {
               const r = rows[i];
@@ -881,21 +888,48 @@
 
               let dateStr = '', title = '', category = 'Others', site = '', incomeAmt = 0, expenseAmt = 0;
 
-              if (Object.keys(colMap).length > 0) {
+              if (colMap.date !== undefined && r[colMap.date] !== undefined) {
                 dateStr = String(r[colMap.date] || '').trim().slice(0, 10);
-                title = String(r[colMap.title] || 'Excel Import').trim();
-                category = String(r[colMap.category] || 'Others').trim();
-                site = String(r[colMap.site] || '').trim();
-                incomeAmt = parseFloat(String(r[colMap.income] || '0').replace(/[^0-9.]/g, '')) || 0;
-                expenseAmt = parseFloat(String(r[colMap.expense] || '0').replace(/[^0-9.]/g, '')) || 0;
+              } else if (r[0]) {
+                dateStr = String(r[0]).trim().slice(0, 10);
               }
 
-              if (!dateStr || dateStr.toLowerCase().includes('date')) continue;
+              if (colMap.title !== undefined && r[colMap.title] !== undefined) {
+                title = String(r[colMap.title] || '').trim();
+              } else if (r[1]) {
+                title = String(r[1]).trim();
+              }
+
+              if (colMap.category !== undefined && r[colMap.category] !== undefined) {
+                category = String(r[colMap.category] || '').trim();
+              } else if (r[2]) {
+                category = String(r[2]).trim();
+              }
+
+              if (colMap.site !== undefined && r[colMap.site] !== undefined) {
+                site = String(r[colMap.site] || '').trim();
+              } else if (r[3]) {
+                site = String(r[3]).trim();
+              }
+
+              if (colMap.income !== undefined && r[colMap.income] !== undefined) {
+                incomeAmt = parseFloat(String(r[colMap.income] || '0').replace(/[^0-9.]/g, '')) || 0;
+              } else if (r[4]) {
+                incomeAmt = parseFloat(String(r[4] || '0').replace(/[^0-9.]/g, '')) || 0;
+              }
+
+              if (colMap.expense !== undefined && r[colMap.expense] !== undefined) {
+                expenseAmt = parseFloat(String(r[colMap.expense] || '0').replace(/[^0-9.]/g, '')) || 0;
+              } else if (r[5]) {
+                expenseAmt = parseFloat(String(r[5] || '0').replace(/[^0-9.]/g, '')) || 0;
+              }
+
+              if (!dateStr || dateStr.toLowerCase().includes('date') || dateStr.toLowerCase().includes('selected')) continue;
               if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
 
               if (incomeAmt > 0) {
                 const payload = {
-                  title: title,
+                  title: title || 'Income',
                   amount: incomeAmt,
                   category: category || 'Salary',
                   date: dateStr,
@@ -915,7 +949,7 @@
 
               if (expenseAmt > 0) {
                 const payload = {
-                  title: title,
+                  title: title || 'Expense',
                   amount: expenseAmt,
                   category: category || 'Expense',
                   date: dateStr,
