@@ -625,10 +625,10 @@
         }
 
         closeTransactionModal();
+        location.reload(); // instant refresh and clear screen
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving transaction: " + err.message);
-      } finally {
         saveBtn.disabled = false;
         saveBtn.innerText = 'Save Entry';
       }
@@ -642,6 +642,7 @@
         try {
           await db.collection('expenses').doc(id).delete();
           closeTransactionModal();
+          location.reload(); // instant refresh and clear screen
         } catch (err) {
           alert("Error deleting entry: " + err.message);
         }
@@ -778,6 +779,7 @@
 
           alert(`Successfully uploaded all ${count} historical entries from Excel!`);
           document.getElementById('excelImportInput').value = '';
+          location.reload();
         } catch (err) {
           console.error("Excel import error:", err);
           alert("Error importing Excel file. Please try again.");
