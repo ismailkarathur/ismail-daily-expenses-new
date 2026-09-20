@@ -102,45 +102,54 @@
     </div>
 
     <!-- Main Balance Card -->
-    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 shadow-xl space-y-5">
-      <div>
-        <span class="text-xs text-amber-500/80 uppercase font-bold tracking-wider">AVAILABLE BALANCE</span>
-        <div id="availableBalanceText" class="text-3xl font-black text-amber-400 mt-1">₹0.00</div>
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 shadow-xl space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-xs text-amber-500/80 uppercase font-bold tracking-wider">AVAILABLE BALANCE</span>
+          <div id="availableBalanceText" class="text-3xl font-black text-amber-400 mt-1">₹0.00</div>
+        </div>
+        <!-- Month Selector for Cards -->
+        <div>
+          <select id="cardMonthSelect" onchange="updateSummary()" class="bg-[#141414] border border-[#333] text-amber-400 text-xs font-semibold px-2.5 py-1.5 rounded-xl outline-none">
+            <option value="ALL">All Time</option>
+          </select>
+        </div>
       </div>
 
+      <!-- Small Monthly Income & Expenses Cards -->
       <div class="grid grid-cols-2 gap-3">
-        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
-          <span class="text-[10px] text-gray-400 uppercase font-semibold">INCOME</span>
-          <div id="totalIncomeText" class="text-lg font-bold text-green-400 mt-0.5">₹0.00</div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
+          <span class="text-[9px] text-gray-400 uppercase font-semibold">MONTH INCOME</span>
+          <div id="totalIncomeText" class="text-sm font-extrabold text-green-400 mt-0.5">₹0.00</div>
         </div>
-        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
-          <span class="text-[10px] text-gray-400 uppercase font-semibold">EXPENSES</span>
-          <div id="totalExpenseText" class="text-lg font-bold text-amber-500 mt-0.5">₹0.00</div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
+          <span class="text-[9px] text-gray-400 uppercase font-semibold">MONTH EXPENSES</span>
+          <div id="totalExpenseText" class="text-sm font-extrabold text-amber-500 mt-0.5">₹0.00</div>
         </div>
-        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
-          <span class="text-[10px] text-gray-400 uppercase font-semibold">TRANSACTIONS</span>
-          <div id="totalTxCountText" class="text-lg font-bold text-white mt-0.5">0</div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
+          <span class="text-[9px] text-gray-400 uppercase font-semibold">TRANSACTIONS</span>
+          <div id="totalTxCountText" class="text-sm font-bold text-white mt-0.5">0</div>
         </div>
-        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
-          <span class="text-[10px] text-gray-400 uppercase font-semibold">TOP CATEGORY</span>
-          <div id="topCategoryText" class="text-lg font-bold text-white mt-0.5">-</div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
+          <span class="text-[9px] text-gray-400 uppercase font-semibold">TOP CATEGORY</span>
+          <div id="topCategoryText" class="text-sm font-bold text-white mt-0.5 truncate">-</div>
         </div>
       </div>
 
-      <div class="grid grid-cols-2 gap-3 pt-2">
-        <button onclick="openTransactionModal('Expense')" class="bg-amber-500 hover:bg-amber-400 text-black py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg">
+      <div class="grid grid-cols-2 gap-3 pt-1">
+        <button onclick="openTransactionModal('Expense')" class="bg-amber-500 hover:bg-amber-400 text-black py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg">
           <span>-</span> Add Expense
         </button>
-        <button onclick="openTransactionModal('Income')" class="bg-[#2a2a2a] hover:bg-[#333] text-white py-3 rounded-xl font-bold border border-[#3a3a3a] flex items-center justify-center gap-2">
+        <button onclick="openTransactionModal('Income')" class="bg-[#2a2a2a] hover:bg-[#333] text-white py-2.5 rounded-xl font-bold text-xs border border-[#3a3a3a] flex items-center justify-center gap-2">
           <span>+</span> Add Income
         </button>
       </div>
     </div>
 
-    <!-- Weekly Cashflow Chart -->
-    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 space-y-3">
-      <h3 class="text-sm font-bold text-white">Weekly cash flow</h3>
-      <div class="h-40 w-full">
+    <!-- Simple Weekly Cashflow Chart -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-4 space-y-2">
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider">Weekly cash flow</h3>
+      <div class="h-32 w-full">
         <canvas id="cashflowChart"></canvas>
       </div>
     </div>
@@ -391,7 +400,6 @@
     });
 
     window.addEventListener('online', async () => {
-      console.log("Internet restored! Syncing offline transactions...");
       await syncOfflineTransactions();
     });
 
@@ -490,6 +498,31 @@
       siteFilter.value = currentVal;
     }
 
+    function populateMonthDropdown() {
+      const monthSelect = document.getElementById('cardMonthSelect');
+      const currentVal = monthSelect.value;
+      const months = new Set();
+      
+      allTx.forEach(t => {
+        if (t.date) {
+          const m = t.date.slice(0, 7); // YYYY-MM
+          months.add(m);
+        }
+      });
+
+      monthSelect.innerHTML = '<option value="ALL">All Time</option>';
+      Array.from(months).sort().reverse().forEach(m => {
+        const [yr, mn] = m.split('-');
+        const dateObj = new Date(yr, mn - 1, 1);
+        const monthName = dateObj.toLocaleString('default', { month: 'short', year: 'numeric' });
+        monthSelect.innerHTML += `<option value="${m}">${monthName}</option>`;
+      });
+      
+      if ([...months].includes(currentVal) || currentVal === 'ALL') {
+        monthSelect.value = currentVal;
+      }
+    }
+
     function openCategoryModal() { document.getElementById('categoryModal').classList.remove('hidden'); }
     function closeCategoryModal() { document.getElementById('categoryModal').classList.add('hidden'); }
 
@@ -533,6 +566,7 @@
         });
 
         populateSiteDropdown();
+        populateMonthDropdown();
         updateSummary();
         renderTable();
         renderChart();
@@ -541,6 +575,7 @@
         allTx = offlineData;
         allTx.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         populateSiteDropdown();
+        populateMonthDropdown();
         updateSummary();
         renderTable();
         renderChart();
@@ -565,20 +600,43 @@
     }
 
     function updateSummary() {
-      let income = 0, expense = 0; let catCounts = {};
+      const selectedMonth = document.getElementById('cardMonthSelect').value;
+      let totalOverallIncome = 0, totalOverallExpense = 0;
+      let monthIncome = 0, monthExpense = 0;
+      let catCounts = {};
+
       allTx.forEach(t => {
         const amt = parseFloat(t.amount || 0);
-        if (t.type === 'Income' || amt > 0) {
-          income += Math.abs(amt);
-        } else {
-          expense += Math.abs(amt);
-          const cat = t.category || 'Others';
-          catCounts[cat] = (catCounts[cat] || 0) + Math.abs(amt);
+        const isInc = t.type === 'Income' || amt > 0;
+        const val = Math.abs(amt);
+
+        if (isInc) totalOverallIncome += val;
+        else {
+          totalOverallExpense += val;
+          if (selectedMonth === 'ALL') {
+            const cat = t.category || 'Others';
+            catCounts[cat] = (catCounts[cat] || 0) + val;
+          }
+        }
+
+        // Check if matches selected month for card
+        if (selectedMonth !== 'ALL' && t.date && t.date.startsWith(selectedMonth)) {
+          if (isInc) monthIncome += val;
+          else {
+            monthExpense += val;
+            const cat = t.category || 'Others';
+            catCounts[cat] = (catCounts[cat] || 0) + val;
+          }
         }
       });
-      document.getElementById('availableBalanceText').innerText = `₹${(income - expense).toFixed(2)}`;
-      document.getElementById('totalIncomeText').innerText = `₹${income.toFixed(2)}`;
-      document.getElementById('totalExpenseText').innerText = `₹${expense.toFixed(2)}`;
+
+      const displayIncome = selectedMonth === 'ALL' ? totalOverallIncome : monthIncome;
+      const displayExpense = selectedMonth === 'ALL' ? totalOverallExpense : monthExpense;
+      const availableBalance = totalOverallIncome - totalOverallExpense;
+
+      document.getElementById('availableBalanceText').innerText = `₹${availableBalance.toFixed(2)}`;
+      document.getElementById('totalIncomeText').innerText = `₹${displayIncome.toFixed(2)}`;
+      document.getElementById('totalExpenseText').innerText = `₹${displayExpense.toFixed(2)}`;
       document.getElementById('totalTxCountText').innerText = allTx.length;
       
       let topCat = '-', maxVal = 0;
@@ -616,7 +674,6 @@
         const absAmt = Math.abs(parseFloat(item.amount) || 0);
         const displaySite = item.site || item.siteProject || '-';
 
-        // Styling according to Income (Green) vs Salary (Red)
         let catBadgeClass = "bg-[#2a2a2a] text-amber-400";
         let amtTextClass = "text-amber-500 font-bold";
         let rowHighlight = "hover:bg-[#1a1a1a]";
@@ -663,8 +720,24 @@
       });
       chartInstance = new Chart(ctx, {
         type: 'bar',
-        data: { labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], datasets: [{ data: dataVals, backgroundColor: '#f59e0b', borderRadius: 6 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { color: '#888' } }, y: { grid: { color: '#2a2a2a' }, ticks: { color: '#888' } } } }
+        data: { 
+          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], 
+          datasets: [{ 
+            data: dataVals, 
+            backgroundColor: '#f59e0b', 
+            borderRadius: 4,
+            barThickness: 16
+          }] 
+        },
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          plugins: { legend: { display: false } }, 
+          scales: { 
+            x: { grid: { display: false }, ticks: { color: '#777', font: { size: 10 } } }, 
+            y: { grid: { color: '#222' }, ticks: { color: '#777', font: { size: 9 } } } 
+          } 
+        }
       });
     }
 
