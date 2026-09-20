@@ -191,12 +191,13 @@
   <script>
     // --- FIREBASE CONFIGURATION ---
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyA2i0T8X2tlbyD0Cv4BclaXw-WV67W4rjg",
+      authDomain: "ismail-expense-manager.firebaseapp.com",
+      projectId: "ismail-expense-manager",
+      storageBucket: "ismail-expense-manager.firebasestorage.app",
+      messagingSenderId: "416995024743",
+      appId: "1:416995024743:web:b8ad4d4ac2aecc1e53d9c2",
+      measurementId: "G-DC3HQ68C7T"
     };
     
     firebase.initializeApp(firebaseConfig);
@@ -254,6 +255,8 @@
             allExpenses.push({ id: doc.id, ...doc.data() });
           });
           renderTable();
+        }, err => {
+          console.error("Firestore snapshot error:", err);
         });
     }
 
