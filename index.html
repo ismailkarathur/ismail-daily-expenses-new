@@ -270,9 +270,12 @@
       <h3 class="text-lg font-bold text-white">Add New Category</h3>
       <div class="space-y-3">
         <input type="text" id="newCategoryName" placeholder="Category Name" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
-        <div class="flex justify-end gap-2">
-          <button onclick="closeCategoryModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs">Cancel</button>
-          <button onclick="saveNewCategory()" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs">Add Category</button>
+        <div class="flex justify-between items-center pt-2">
+          <button onclick="resetDefaultCategories()" class="text-xs text-red-400 hover:underline">Reset Categories</button>
+          <div class="flex gap-2">
+            <button onclick="closeCategoryModal()" class="px-3 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs">Cancel</button>
+            <button onclick="saveNewCategory()" class="px-3 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs">Add</button>
+          </div>
         </div>
       </div>
     </div>
@@ -297,9 +300,9 @@
 
     let currentUser = null;
     let allTx = [];
-    let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
+    const defaultCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
+    let customCategories = [...defaultCategories];
     let chartInstance = null;
-    let unsubscribeListener = null;
 
     const savedCats = localStorage.getItem('ismail_custom_cats');
     if (savedCats) {
@@ -312,14 +315,10 @@
         document.getElementById('authContainer').classList.add('hidden');
         document.getElementById('appContainer').classList.remove('hidden');
         populateCategoryDropdowns();
-        listenToData();
+        fetchExpenses();
       } else {
         document.getElementById('authContainer').classList.remove('hidden');
         document.getElementById('appContainer').classList.add('hidden');
-        if (unsubscribeListener) {
-          unsubscribeListener();
-          unsubscribeListener = null;
-        }
       }
     });
 
@@ -335,10 +334,7 @@
       if (email) auth.sendPasswordResetEmail(email).then(() => alert("Reset email sent!")).catch(err => alert(err.message));
     }
 
-    function logout() { 
-      if (unsubscribeListener) unsubscribeListener();
-      auth.signOut(); 
-    }
+    function logout() { auth.signOut(); }
 
     function populateCategoryDropdowns() {
       const txCat = document.getElementById('txCategory');
@@ -367,34 +363,44 @@
       }
     }
 
-    function listenToData() {
+    function resetDefaultCategories() {
+      if (confirm("Reset to default categories?")) {
+        customCategories = [...defaultCategories];
+        localStorage.setItem('ismail_custom_cats', JSON.stringify(customCategories));
+        populateCategoryDropdowns();
+        closeCategoryModal();
+      }
+    }
+
+    // Direct fetch instead of unreliable snapshot listeners to prevent clearing/loss on refresh
+    async function fetchExpenses() {
       if (!currentUser) return;
-      if (unsubscribeListener) unsubscribeListener();
-
-      unsubscribeListener = db.collection('expenses')
-        .where('uid', '==', currentUser.uid)
-        .onSnapshot(snapshot => {
-          allTx = [];
-          snapshot.forEach(doc => {
-            const data = doc.data();
-            allTx.push({ 
-              id: doc.id, 
-              ...data,
-              date: data.date || new Date().toISOString().split('T')[0]
-            });
+      try {
+        const snapshot = await db.collection('expenses').where('uid', '==', currentUser.uid).get();
+        allTx = [];
+        snapshot.forEach(doc => {
+          const data = doc.data();
+          allTx.push({ 
+            id: doc.id, 
+            ...data,
+            date: data.date || new Date().toISOString().split('T')[0],
+            createdAt: data.createdAt || 0
           });
+        });
 
-          // Sort strictly using numeric creation time (updatedAt) or fallback to date
-          allTx.sort((a, b) => {
-            const timeA = typeof a.updatedAt === 'number' ? a.updatedAt : (a.updatedAt?.toMillis ? a.updatedAt.toMillis() : new Date(a.date).getTime());
-            const timeB = typeof b.updatedAt === 'number' ? b.updatedAt : (b.updatedAt?.toMillis ? b.updatedAt.toMillis() : new Date(b.date).getTime());
-            return timeB - timeA;
-          });
+        // Sort descending by creation timestamp or date
+        allTx.sort((a, b) => {
+          const timeA = Number(a.createdAt) || new Date(a.date).getTime();
+          const timeB = Number(b.createdAt) || new Date(b.date).getTime();
+          return timeB - timeA;
+        });
 
-          updateSummary();
-          renderTable();
-          renderChart();
-        }, err => console.error("Snapshot error:", err));
+        updateSummary();
+        renderTable();
+        renderChart();
+      } catch (err) {
+        console.error("Fetch error:", err);
+      }
     }
 
     function updateSummary() {
@@ -637,7 +643,7 @@
           site, 
           type, 
           uid: currentUser.uid, 
-          updatedAt: Date.now() // Reliable local millisecond timestamp
+          createdAt: Date.now()
         };
         if (fileUrl) data.fileUrl = fileUrl;
 
@@ -648,6 +654,7 @@
         }
 
         closeTransactionModal();
+        await fetchExpenses();
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving transaction: " + err.message);
@@ -665,6 +672,7 @@
         try {
           await db.collection('expenses').doc(id).delete();
           closeTransactionModal();
+          await fetchExpenses();
         } catch (err) {
           alert("Error deleting entry: " + err.message);
         }
@@ -776,7 +784,7 @@
                   site: site,
                   type: entryType,
                   uid: currentUser.uid,
-                  updatedAt: Date.now()
+                  createdAt: Date.now()
                 });
               }
             }
@@ -801,6 +809,7 @@
 
           alert(`Successfully uploaded all ${count} historical entries from Excel!`);
           document.getElementById('excelImportInput').value = '';
+          await fetchExpenses();
         } catch (err) {
           console.error("Excel import error:", err);
           alert("Error importing Excel file. Please try again.");
