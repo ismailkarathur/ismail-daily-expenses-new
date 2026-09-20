@@ -365,9 +365,19 @@
         .onSnapshot(snapshot => {
           allTx = [];
           snapshot.forEach(doc => {
-            allTx.push({ id: doc.id, ...doc.data() });
+            const data = doc.data();
+            // Ensure proper string date handling to prevent timezone mismatch / deletion
+            let formattedDate = data.date || new Date().toISOString().split('T')[0];
+            if (formattedDate.length > 10) formattedDate = formattedDate.slice(0, 10);
+
+            allTx.push({ 
+              id: doc.id, 
+              ...data,
+              date: formattedDate 
+            });
           });
-          // Sort newest first
+
+          // Sort newest first based on date and creation timestamp
           allTx.sort((a, b) => {
             const dateA = new Date(a.date || 0);
             const dateB = new Date(b.date || 0);
@@ -376,6 +386,7 @@
             const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
             return timeB - timeA;
           });
+
           updateSummary();
           renderTable();
           renderChart();
@@ -599,7 +610,7 @@
         const title = document.getElementById('txTitle').value;
         const amount = parseFloat(document.getElementById('txAmount').value);
         const category = document.getElementById('txCategory').value;
-        const date = document.getElementById('txDate').value;
+        const dateInput = document.getElementById('txDate').value;
         const type = document.getElementById('txType').value;
         const site = type === 'Expense' ? document.getElementById('txSite').value : '';
         const fileInput = document.getElementById('txFile');
@@ -614,7 +625,16 @@
           fileUrl = await snapshot.ref.getDownloadURL();
         }
 
-        const data = { title, amount, category, date, site, type, uid: currentUser.uid, updatedAt: new Date() };
+        const data = { 
+          title, 
+          amount, 
+          category, 
+          date: dateInput, // Clean YYYY-MM-DD string format
+          site, 
+          type, 
+          uid: currentUser.uid, 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        };
         if (fileUrl) data.fileUrl = fileUrl;
 
         if (id) {
@@ -624,7 +644,7 @@
         }
 
         closeTransactionModal();
-        location.reload(); // Hard refresh guarantees clean screen and instant update
+        location.reload();
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving transaction: " + err.message);
@@ -641,7 +661,7 @@
         try {
           await db.collection('expenses').doc(id).delete();
           closeTransactionModal();
-          location.reload(); // Hard refresh guarantees clean screen and instant update
+          location.reload();
         } catch (err) {
           alert("Error deleting entry: " + err.message);
         }
@@ -753,7 +773,7 @@
                   site: site,
                   type: entryType,
                   uid: currentUser.uid,
-                  updatedAt: new Date()
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
               }
             }
