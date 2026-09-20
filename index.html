@@ -30,7 +30,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
-<body class="bg-[#121212] text-amber-50 min-h-screen font-sans antialiased pb-10">
+<body class="bg-[#121212] text-amber-50 min-h-screen font-sans antialiased pb-10" onclick="closeAllDropdowns(event)">
 
   <!-- Auth Screen (Login / Signup) -->
   <div id="authScreen" class="fixed inset-0 bg-[#121212] flex items-center justify-center p-4 z-50">
@@ -57,13 +57,29 @@
   <div id="appContainer" class="max-w-2xl mx-auto px-4 py-6 space-y-6 hidden">
     
     <!-- Top Header Profile Section -->
-    <div class="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
+    <div class="flex items-center justify-between border-b border-[#2a2a2a] pb-4 relative">
       <div>
         <h1 class="text-2xl font-extrabold text-white tracking-wide">Ismail Expense Manager</h1>
         <p class="text-xs text-amber-500/90 mt-0.5">Owner: <span class="font-semibold text-white">Ismail vk</span> • <button onclick="logoutUser()" class="text-red-400 underline ml-2">Logout</button></p>
       </div>
-      <div class="flex gap-2">
+      <div class="flex items-center gap-2">
         <button onclick="openCategoryModal()" class="text-xs bg-[#2a2a2a] text-amber-400 px-3 py-2 rounded-xl border border-amber-500/20 hover:bg-amber-500/10 font-medium">+ Category</button>
+        
+        <!-- 3 Dot Menu Button -->
+        <div class="relative">
+          <button onclick="toggleMenuDropdown(event)" class="p-2 bg-[#2a2a2a] hover:bg-[#333] text-white rounded-xl border border-[#3a3a3a] text-sm font-bold flex items-center justify-center w-9 h-9">
+            ⋮
+          </button>
+          <!-- Dropdown Menu -->
+          <div id="topMenuDropdown" class="hidden absolute right-0 mt-2 w-48 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-2xl py-1 z-50 text-xs">
+            <button onclick="openCustomModal('mailLogin')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Mail ID Login</button>
+            <button onclick="openCustomModal('adminLogin')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Admin Login</button>
+            <button onclick="openCustomModal('forgotPassword')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Forgot Password</button>
+            <button onclick="openCustomModal('sendToMail')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Send to Mail</button>
+            <div class="border-t border-[#2a2a2a] my-1"></div>
+            <button onclick="clearAllTransactions()" class="w-full text-left px-4 py-2.5 hover:bg-red-500/10 text-red-400 font-semibold">🗑️ Clear All Data</button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -195,6 +211,19 @@
     </div>
   </div>
 
+  <!-- Generic Popup Modal for 3-Dot Options -->
+  <div id="customModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <h3 id="customModalTitle" class="text-lg font-bold text-white">Title</h3>
+      <div id="customModalBody" class="space-y-3 text-xs text-gray-300">
+        <!-- Dynamic content -->
+      </div>
+      <div class="flex justify-end pt-2">
+        <button onclick="closeCustomModal()" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Transaction Modal -->
   <div id="txModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
     <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -230,7 +259,6 @@
           </div>
         </div>
 
-        <!-- Attached Photo / Document Upload Section -->
         <div>
           <label class="block text-xs font-medium text-gray-400 mb-1">Attach Bill / Photo / Document</label>
           <input type="file" id="txFile" accept="image/*,application/pdf" class="w-full p-2 bg-[#121212] border border-[#333] rounded-xl text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-black hover:file:bg-amber-400">
@@ -269,7 +297,7 @@
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, getDocs, doc, updateDoc, deleteDoc, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
     import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
 
     const firebaseConfig = {
@@ -299,7 +327,6 @@
     window.updateDoc = updateDoc;
     window.deleteDoc = deleteDoc;
     window.query = query;
-    window.orderBy = orderBy;
     window.ref = ref;
     window.uploadBytes = uploadBytes;
     window.getDownloadURL = getDownloadURL;
@@ -329,6 +356,44 @@
       }
       populateCategoryDropdowns();
     });
+
+    function toggleMenuDropdown(e) {
+      e.stopPropagation();
+      const menu = document.getElementById('topMenuDropdown');
+      menu.classList.toggle('hidden');
+    }
+
+    function closeAllDropdowns(e) {
+      const menu = document.getElementById('topMenuDropdown');
+      if (menu && !menu.classList.contains('hidden')) {
+        menu.classList.add('hidden');
+      }
+    }
+
+    function openCustomModal(type) {
+      const modal = document.getElementById('customModal');
+      const title = document.getElementById('customModalTitle');
+      const body = document.getElementById('customModalBody');
+      modal.classList.remove('hidden');
+
+      if (type === 'mailLogin') {
+        title.innerText = 'Mail ID Login';
+        body.innerHTML = `<p class="text-gray-300">You are currently logged in via email authentication. Use the main login screen if you want to switch accounts.</p>`;
+      } else if (type === 'adminLogin') {
+        title.innerText = 'Admin Login Access';
+        body.innerHTML = `<p class="text-gray-300">Admin controls and elevated permissions are active for the registered owner account (Ismail vk).</p>`;
+      } else if (type === 'forgotPassword') {
+        title.innerText = 'Forgot Password';
+        body.innerHTML = `<p class="text-gray-300">To reset your password, please use the Firebase authentication recovery link or contact support.</p>`;
+      } else if (type === 'sendToMail') {
+        title.innerText = 'Send Summary to Mail';
+        body.innerHTML = `<p class="text-gray-300">Export your data to Excel or share the JPEG report using the buttons on the dashboard to send it via email/WhatsApp.</p>`;
+      }
+    }
+
+    function closeCustomModal() {
+      document.getElementById('customModal').classList.add('hidden');
+    }
 
     function handleAuth(e) {
       e.preventDefault();
@@ -390,6 +455,26 @@
         renderChart();
       } catch (err) {
         console.error(err);
+      }
+    }
+
+    async function clearAllTransactions() {
+      if (confirm("തീർച്ചയായും എല്ലാ എട്രികളും ഡിലീറ്റ് ചെയ്യണമെന്നുണ്ടോ? (Are you sure you want to delete all entries?)")) {
+        try {
+          const q = window.query(window.collection(window.db, "transactions"));
+          const querySnapshot = await window.getDocs(q);
+          
+          let deletePromises = [];
+          querySnapshot.forEach((docSnap) => {
+            deletePromises.push(window.deleteDoc(window.doc(window.db, "transactions", docSnap.id)));
+          });
+
+          await Promise.all(deletePromises);
+          alert("എല്ലാ ട്രാൻസാക്ഷൻസും വിജയകരമായി ഡിലീറ്റ് ചെയ്തു!");
+          loadDataFromFirebase();
+        } catch (err) {
+          alert("ഡിലീറ്റ് ചെയ്യുന്നതിൽ പ്രശ്നമുണ്ടായി: " + err.message);
+        }
       }
     }
 
