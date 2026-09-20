@@ -253,9 +253,12 @@
           <input type="file" id="txFile" accept="image/*,.pdf,application/pdf" capture="environment" class="w-full text-xs text-gray-400 border border-[#333] p-2 rounded-xl bg-[#121212]">
         </div>
 
-        <div class="flex justify-end gap-2 pt-3">
-          <button type="button" onclick="closeTransactionModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs font-semibold">Cancel</button>
-          <button type="submit" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400">Save Entry</button>
+        <div class="flex items-center justify-between pt-3">
+          <button type="button" id="deleteTxModalBtn" onclick="deleteTxFromModal()" class="px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-xs font-semibold hover:bg-red-500/20 hidden">Delete</button>
+          <div class="flex gap-2 ml-auto">
+            <button type="button" onclick="closeTransactionModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs font-semibold">Cancel</button>
+            <button id="saveEntryBtn" type="submit" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400 disabled:opacity-50">Save Entry</button>
+          </div>
         </div>
       </form>
     </div>
@@ -435,7 +438,6 @@
           <td class="p-2 text-right space-x-2">
             ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-amber-400 underline text-[10px]">File</a>` : ''}
             <button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>
-            <button onclick="deleteTx('${item.id}')" class="text-red-400 hover:underline text-[10px]">Delete</button>
           </td>
         `;
         tbody.appendChild(tr);
@@ -487,6 +489,8 @@
       document.getElementById('txType').value = type;
       document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
       
+      document.getElementById('deleteTxModalBtn').classList.add('hidden');
+
       const siteContainer = document.getElementById('txSiteContainer');
       if (type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Add Income';
@@ -510,6 +514,8 @@
       document.getElementById('txDate').value = item.date || new Date().toISOString().split('T')[0];
       document.getElementById('txType').value = item.type || 'Expense';
 
+      document.getElementById('deleteTxModalBtn').classList.remove('hidden');
+
       const siteContainer = document.getElementById('txSiteContainer');
       if (item.type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Edit Income';
@@ -524,42 +530,67 @@
       document.getElementById('txModal').classList.remove('hidden');
     }
 
-    function closeTransactionModal() { document.getElementById('txModal').classList.add('hidden'); }
+    function closeTransactionModal() { 
+      document.getElementById('txForm').reset();
+      document.getElementById('deleteTxModalBtn').classList.add('hidden');
+      document.getElementById('txModal').classList.add('hidden'); 
+    }
 
     async function saveTransaction(e) {
       e.preventDefault();
-      const id = document.getElementById('editDocId').value;
-      const title = document.getElementById('txTitle').value;
-      const amount = parseFloat(document.getElementById('txAmount').value);
-      const category = document.getElementById('txCategory').value;
-      const date = document.getElementById('txDate').value;
-      const type = document.getElementById('txType').value;
-      const site = type === 'Expense' ? document.getElementById('txSite').value : '';
-      const fileInput = document.getElementById('txFile');
+      
+      const saveBtn = document.getElementById('saveEntryBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerText = 'Saving...';
 
-      let fileUrl = '';
-      if (fileInput.files[0]) {
-        const file = fileInput.files[0];
-        const storageRef = storage.ref(`receipts/${currentUser.uid}/${Date.now()}_${file.name}`);
-        const snapshot = await storageRef.put(file);
-        fileUrl = await snapshot.ref.getDownloadURL();
+      try {
+        const id = document.getElementById('editDocId').value;
+        const title = document.getElementById('txTitle').value;
+        const amount = parseFloat(document.getElementById('txAmount').value);
+        const category = document.getElementById('txCategory').value;
+        const date = document.getElementById('txDate').value;
+        const type = document.getElementById('txType').value;
+        const site = type === 'Expense' ? document.getElementById('txSite').value : '';
+        const fileInput = document.getElementById('txFile');
+
+        let fileUrl = '';
+        if (fileInput.files[0]) {
+          const file = fileInput.files[0];
+          const storageRef = storage.ref(`receipts/${currentUser.uid}/${Date.now()}_${file.name}`);
+          const snapshot = await storageRef.put(file);
+          fileUrl = await snapshot.ref.getDownloadURL();
+        }
+
+        const data = { title, amount, category, date, site, type, uid: currentUser.uid, updatedAt: new Date() };
+        if (fileUrl) data.fileUrl = fileUrl;
+
+        if (id) {
+          await db.collection('expenses').doc(id).update(data);
+        } else {
+          await db.collection('expenses').add(data);
+        }
+
+        closeTransactionModal();
+      } catch (err) {
+        console.error("Save error:", err);
+        alert("Error saving transaction: " + err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Save Entry';
       }
-
-      const data = { title, amount, category, date, site, type, uid: currentUser.uid, updatedAt: new Date() };
-      if (fileUrl) data.fileUrl = fileUrl;
-
-      if (id) {
-        await db.collection('expenses').doc(id).update(data);
-      } else {
-        await db.collection('expenses').add(data);
-      }
-
-      closeTransactionModal();
     }
 
-    async function deleteTx(id) {
+    async function deleteTxFromModal() {
+      const id = document.getElementById('editDocId').value;
+      if (!id) return;
+
       if (confirm("Are you sure you want to delete this transaction?")) {
-        await db.collection('expenses').doc(id).delete();
+        try {
+          await db.collection('expenses').doc(id).delete();
+          closeTransactionModal();
+        } catch (err) {
+          alert("Error deleting entry: " + err.message);
+        }
       }
     }
 
@@ -572,7 +603,7 @@
       return allTx.filter(t => selectedIds.includes(t.id));
     }
 
-    // --- ENHANCED EXCEL IMPORT FUNCTION (SUPPORTING MULTI-SHEET & CUSTOM HEADERS) ---
+    // --- ENHANCED EXCEL IMPORT FUNCTION ---
     function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
@@ -667,7 +698,6 @@
             return alert("No valid transaction entries found in Excel file.");
           }
 
-          // Batch commit to Firestore (100 items per batch)
           let count = 0;
           const batchSize = 100;
           for (let i = 0; i < extractedEntries.length; i += batchSize) {
