@@ -26,46 +26,14 @@
   </script>
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Firebase SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
   <!-- Export & Import Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body class="bg-[#121212] text-amber-50 min-h-screen font-sans antialiased pb-10">
 
-  <!-- Auth Screen -->
-  <div id="authContainer" class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-[#1e1e1e] p-8 rounded-2xl border border-[#2a2a2a] max-w-md w-full shadow-2xl">
-      <div class="text-center mb-6">
-        <div class="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-black text-3xl font-extrabold mx-auto mb-3 shadow-lg">₹</div>
-        <h2 class="text-2xl font-bold text-white">Ismail Expense Manager</h2>
-        <p class="text-xs text-amber-500/80 mt-1">Sign in to manage your cash flow</p>
-      </div>
-      
-      <form id="loginForm" class="space-y-4">
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1">Email Address</label>
-          <input type="email" id="loginEmail" required class="w-full p-3 bg-[#121212] border border-[#333] rounded-xl text-white focus:border-amber-500 outline-none">
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1">Password</label>
-          <input type="password" id="loginPassword" required class="w-full p-3 bg-[#121212] border border-[#333] rounded-xl text-white focus:border-amber-500 outline-none">
-        </div>
-        <button type="submit" class="w-full bg-amber-500 text-black py-3 rounded-xl font-bold hover:bg-amber-400 transition">Login</button>
-      </form>
-
-      <div class="mt-4 text-center text-xs">
-        <button onclick="handleForgotPassword()" class="text-amber-500 hover:underline">Forgot Password?</button>
-      </div>
-    </div>
-  </div>
-
   <!-- Main Dashboard -->
-  <div id="appContainer" class="hidden max-w-2xl mx-auto px-4 py-6 space-y-6">
+  <div id="appContainer" class="max-w-2xl mx-auto px-4 py-6 space-y-6">
     
     <!-- Top Header Profile Section -->
     <div class="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
@@ -75,7 +43,6 @@
       </div>
       <div class="flex gap-2">
         <button onclick="openCategoryModal()" class="text-xs bg-[#2a2a2a] text-amber-400 px-3 py-2 rounded-xl border border-amber-500/20 hover:bg-amber-500/10 font-medium">+ Category</button>
-        <button onclick="logout()" class="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-2 rounded-xl hover:bg-red-500/20">Logout</button>
       </div>
     </div>
 
@@ -248,11 +215,6 @@
           </div>
         </div>
 
-        <div id="txFileContainer">
-          <label class="block text-xs font-medium text-gray-400 mb-1">Attachment (Camera / Photos / PDF Docs)</label>
-          <input type="file" id="txFile" accept="image/*,.pdf,application/pdf" capture="environment" class="w-full text-xs text-gray-400 border border-[#333] p-2 rounded-xl bg-[#121212]">
-        </div>
-
         <div class="flex items-center justify-between pt-3">
           <button type="button" id="deleteTxModalBtn" onclick="deleteTxFromModal()" class="px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-xs font-semibold hover:bg-red-500/20 hidden">Delete</button>
           <div class="flex gap-2 ml-auto">
@@ -282,23 +244,6 @@
   </div>
 
   <script>
-    // --- FIREBASE CONFIGURATION ---
-    const firebaseConfig = {
-      apiKey: "AIzaSyA2i0T8X2tlbyD0Cv4BclaXw-WV67W4rjg",
-      authDomain: "ismail-expense-manager.firebaseapp.com",
-      projectId: "ismail-expense-manager",
-      storageBucket: "ismail-expense-manager.firebasestorage.app",
-      messagingSenderId: "416995024743",
-      appId: "1:416995024743:web:b8ad4d4ac2aecc1e53d9c2",
-      measurementId: "G-DC3HQ68C7T"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
-    const db = firebase.firestore();
-    const storage = firebase.storage();
-
-    let currentUser = null;
     let allTx = [];
     const defaultCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
     let customCategories = [...defaultCategories];
@@ -309,32 +254,11 @@
       try { customCategories = JSON.parse(savedCats); } catch(e){}
     }
 
-    auth.onAuthStateChanged(user => {
-      currentUser = user;
-      if (user) {
-        document.getElementById('authContainer').classList.add('hidden');
-        document.getElementById('appContainer').classList.remove('hidden');
-        populateCategoryDropdowns();
-        fetchExpenses();
-      } else {
-        document.getElementById('authContainer').classList.remove('hidden');
-        document.getElementById('appContainer').classList.add('hidden');
-      }
+    // Load data on start
+    window.addEventListener('DOMContentLoaded', () => {
+      populateCategoryDropdowns();
+      loadExpensesFromStorage();
     });
-
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const email = document.getElementById('loginEmail').value;
-      const pass = document.getElementById('loginPassword').value;
-      auth.signInWithEmailAndPassword(email, pass).catch(err => alert(err.message));
-    });
-
-    function handleForgotPassword() {
-      const email = prompt("Enter your email for reset:");
-      if (email) auth.sendPasswordResetEmail(email).then(() => alert("Reset email sent!")).catch(err => alert(err.message));
-    }
-
-    function logout() { auth.signOut(); }
 
     function populateCategoryDropdowns() {
       const txCat = document.getElementById('txCategory');
@@ -372,35 +296,28 @@
       }
     }
 
-    // Direct fetch instead of unreliable snapshot listeners to prevent clearing/loss on refresh
-    async function fetchExpenses() {
-      if (!currentUser) return;
-      try {
-        const snapshot = await db.collection('expenses').where('uid', '==', currentUser.uid).get();
+    function loadExpensesFromStorage() {
+      const data = localStorage.getItem('ismail_expenses_data');
+      if (data) {
+        try {
+          allTx = JSON.parse(data);
+        } catch(e) {
+          allTx = [];
+        }
+      } else {
         allTx = [];
-        snapshot.forEach(doc => {
-          const data = doc.data();
-          allTx.push({ 
-            id: doc.id, 
-            ...data,
-            date: data.date || new Date().toISOString().split('T')[0],
-            createdAt: data.createdAt || 0
-          });
-        });
-
-        // Sort descending by creation timestamp or date
-        allTx.sort((a, b) => {
-          const timeA = Number(a.createdAt) || new Date(a.date).getTime();
-          const timeB = Number(b.createdAt) || new Date(b.date).getTime();
-          return timeB - timeA;
-        });
-
-        updateSummary();
-        renderTable();
-        renderChart();
-      } catch (err) {
-        console.error("Fetch error:", err);
       }
+      
+      // Sort newest first
+      allTx.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+
+      updateSummary();
+      renderTable();
+      renderChart();
+    }
+
+    function saveExpensesToStorage() {
+      localStorage.setItem('ismail_expenses_data', JSON.stringify(allTx));
     }
 
     function updateSummary() {
@@ -463,7 +380,6 @@
             ${isInc ? '+' : '-'}₹${parseFloat(item.amount).toFixed(2)}
           </td>
           <td class="p-2 text-right space-x-2">
-            ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-amber-400 underline text-[10px]">File</a>` : ''}
             <button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>
           </td>
         `;
@@ -524,11 +440,9 @@
       if (type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Add Income';
         siteContainer.style.display = 'none';
-        fileContainer.style.display = 'none';
       } else {
         document.getElementById('txModalTitle').innerText = 'Add Expense';
         siteContainer.style.display = 'block';
-        fileContainer.style.display = 'block';
       }
 
       document.getElementById('txModal').classList.remove('hidden');
@@ -548,17 +462,13 @@
       document.getElementById('deleteTxModalBtn').classList.remove('hidden');
 
       const siteContainer = document.getElementById('txSiteContainer');
-      const fileContainer = document.getElementById('txFileContainer');
-
       if (item.type === 'Income') {
         document.getElementById('txModalTitle').innerText = 'Edit Income';
         siteContainer.style.display = 'none';
-        fileContainer.style.display = 'none';
         document.getElementById('txSite').value = '';
       } else {
         document.getElementById('txModalTitle').innerText = 'Edit Expense';
         siteContainer.style.display = 'block';
-        fileContainer.style.display = 'block';
         document.getElementById('txSite').value = item.site || '';
       }
 
@@ -574,108 +484,52 @@
       saveBtn.innerText = 'Save Entry';
     }
 
-    async function compressImage(file) {
-      if (!file || !file.type.startsWith('image/')) return file;
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-          const img = new Image();
-          img.src = event.target.result;
-          img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const maxWidth = 1000;
-            let width = img.width;
-            let height = img.height;
-
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
-
-            canvas.toBlob((blob) => {
-              resolve(new File([blob], file.name, { type: 'image/jpeg' }));
-            }, 'image/jpeg', 0.7);
-          };
-          img.onerror = () => resolve(file);
-        };
-        reader.onerror = () => resolve(file);
-      });
-    }
-
-    async function saveTransaction(e) {
+    function saveTransaction(e) {
       e.preventDefault();
       
-      const saveBtn = document.getElementById('saveEntryBtn');
-      saveBtn.disabled = true;
-      saveBtn.innerText = 'Saving...';
+      const id = document.getElementById('editDocId').value;
+      const title = document.getElementById('txTitle').value;
+      const amount = parseFloat(document.getElementById('txAmount').value);
+      const category = document.getElementById('txCategory').value;
+      const dateInput = document.getElementById('txDate').value;
+      const type = document.getElementById('txType').value;
+      const site = type === 'Expense' ? document.getElementById('txSite').value : '';
 
-      try {
-        const id = document.getElementById('editDocId').value;
-        const title = document.getElementById('txTitle').value;
-        const amount = parseFloat(document.getElementById('txAmount').value);
-        const category = document.getElementById('txCategory').value;
-        const dateInput = document.getElementById('txDate').value;
-        const type = document.getElementById('txType').value;
-        const site = type === 'Expense' ? document.getElementById('txSite').value : '';
-        const fileInput = document.getElementById('txFile');
-
-        let fileUrl = '';
-        if (type === 'Expense' && fileInput.files && fileInput.files[0]) {
-          let file = fileInput.files[0];
-          file = await compressImage(file);
-          
-          const storageRef = storage.ref(`receipts/${currentUser.uid}/${Date.now()}_${file.name}`);
-          const snapshot = await storageRef.put(file);
-          fileUrl = await snapshot.ref.getDownloadURL();
+      if (id) {
+        // Edit existing
+        const index = allTx.findIndex(x => x.id === id);
+        if (index !== -1) {
+          allTx[index] = { ...allTx[index], title, amount, category, date: dateInput, site, type };
         }
-
-        const data = { 
-          title, 
-          amount, 
-          category, 
-          date: dateInput, 
-          site, 
-          type, 
-          uid: currentUser.uid, 
+      } else {
+        // Add new
+        const newItem = {
+          id: 'tx_' + Date.now(),
+          title,
+          amount,
+          category,
+          date: dateInput,
+          site,
+          type,
           createdAt: Date.now()
         };
-        if (fileUrl) data.fileUrl = fileUrl;
-
-        if (id) {
-          await db.collection('expenses').doc(id).set(data, { merge: true });
-        } else {
-          await db.collection('expenses').add(data);
-        }
-
-        closeTransactionModal();
-        await fetchExpenses();
-      } catch (err) {
-        console.error("Save error:", err);
-        alert("Error saving transaction: " + err.message);
-      } finally {
-        saveBtn.disabled = false;
-        saveBtn.innerText = 'Save Entry';
+        allTx.unshift(newItem);
       }
+
+      saveExpensesToStorage();
+      closeTransactionModal();
+      loadExpensesFromStorage();
     }
 
-    async function deleteTxFromModal() {
+    function deleteTxFromModal() {
       const id = document.getElementById('editDocId').value;
       if (!id) return;
 
       if (confirm("Are you sure you want to delete this transaction?")) {
-        try {
-          await db.collection('expenses').doc(id).delete();
-          closeTransactionModal();
-          await fetchExpenses();
-        } catch (err) {
-          alert("Error deleting entry: " + err.message);
-        }
+        allTx = allTx.filter(x => x.id !== id);
+        saveExpensesToStorage();
+        closeTransactionModal();
+        loadExpensesFromStorage();
       }
     }
 
@@ -688,131 +542,50 @@
       return allTx.filter(t => selectedIds.includes(t.id));
     }
 
-    // --- ROBUST EXCEL IMPORT FUNCTION ---
+    // --- IMPORT EXCEL ---
     function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
-      reader.onload = async (evt) => {
+      reader.onload = (evt) => {
         try {
           const data = new Uint8Array(evt.target.result);
           const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-
-          let extractedEntries = [];
 
           workbook.SheetNames.forEach(sheetName => {
             const worksheet = workbook.Sheets[sheetName];
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
             
-            if (!rows || rows.length === 0) return;
+            rows.forEach((r, i) => {
+              if (i === 0 || !r || r.length < 2) return;
+              const dateStr = String(r[0] || new Date().toISOString().slice(0,10)).slice(0,10);
+              const title = String(r[1] || 'Excel Import');
+              const category = String(r[2] || 'Others');
+              const site = String(r[3] || '');
+              const amt = parseFloat(String(r[4] || r[5] || 0).replace(/[^0-9.]/g, '')) || 0;
 
-            let headerIdx = -1;
-            let colMap = { date: -1, title: -1, category: -1, site: -1, income: -1, expense: -1, amount: -1, type: -1 };
-
-            for (let i = 0; i < rows.length; i++) {
-              const r = rows[i];
-              if (!r) continue;
-              const rStr = r.map(c => String(c || '').toLowerCase().trim());
-              const hasDate = rStr.some(c => c.includes('date'));
-              const hasDesc = rStr.some(c => c.includes('description') || c.includes('title') || c.includes('expense') || c.includes('income'));
-              const isSummary = rStr.some(c => c === 'entries') && !rStr.some(c => c.includes('description'));
-
-              if (hasDate && hasDesc && !isSummary) {
-                headerIdx = i;
-                rStr.forEach((c, idx) => {
-                  if (c.includes('date')) colMap.date = idx;
-                  else if (c.includes('description') || c.includes('title')) colMap.title = idx;
-                  else if (c.includes('category')) colMap.category = idx;
-                  else if (c.includes('site') || c.includes('project')) colMap.site = idx;
-                  else if (c.includes('income')) colMap.income = idx;
-                  else if (c.includes('expense')) colMap.expense = idx;
-                  else if (c.includes('amount')) colMap.amount = idx;
-                  else if (c.includes('type')) colMap.type = idx;
-                });
-                break;
-              }
-            }
-
-            if (headerIdx === -1) {
-              for (let i = 0; i < rows.length; i++) {
-                const r = rows[i];
-                if (r && r.length >= 5 && String(r[0]).match(/\d{4}-\d{2}-\d{2}/)) {
-                  headerIdx = i - 1;
-                  colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5, amount: -1, type: -1 };
-                  break;
-                }
-              }
-            }
-
-            const searchStart = headerIdx !== -1 ? headerIdx + 1 : 0;
-            for (let i = searchStart; i < rows.length; i++) {
-              const r = rows[i];
-              if (!r || r.length === 0) continue;
-
-              let rawDate = colMap.date !== -1 && colMap.date < r.length ? r[colMap.date] : r[0];
-              if (!rawDate) continue;
-
-              let dateStr = String(rawDate).trim();
-              if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
-              if (!dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
-
-              const title = colMap.title !== -1 && colMap.title < r.length && r[colMap.title] ? String(r[colMap.title]).trim() : (r[1] ? String(r[1]).trim() : 'Excel Import');
-              const category = colMap.category !== -1 && colMap.category < r.length && r[colMap.category] ? String(r[colMap.category]).trim() : (r[2] ? String(r[2]).trim() : 'Others');
-              const site = colMap.site !== -1 && colMap.site < r.length && r[colMap.site] ? String(r[colMap.site]).trim() : (r[3] ? String(r[3]).trim() : '');
-
-              let incVal = colMap.income !== -1 && colMap.income < r.length && r[colMap.income] ? parseFloat(String(r[colMap.income]).replace(/[^0-9.]/g, '')) || 0 : (r[4] ? parseFloat(String(r[4]).replace(/[^0-9.]/g, '')) || 0 : 0);
-              let expVal = colMap.expense !== -1 && colMap.expense < r.length && r[colMap.expense] ? parseFloat(String(r[colMap.expense]).replace(/[^0-9.]/g, '')) || 0 : (r[5] ? parseFloat(String(r[5]).replace(/[^0-9.]/g, '')) || 0 : 0);
-
-              let entryType = 'Expense';
-              let finalAmount = 0;
-
-              if (incVal > 0) {
-                entryType = 'Income';
-                finalAmount = incVal;
-              } else if (expVal > 0) {
-                entryType = 'Expense';
-                finalAmount = expVal;
-              }
-
-              if (finalAmount > 0) {
-                extractedEntries.push({
-                  title: title,
-                  amount: finalAmount,
-                  category: category,
+              if (amt > 0) {
+                allTx.unshift({
+                  id: 'ex_' + Date.now() + Math.random(),
+                  title,
+                  amount: amt,
+                  category,
                   date: dateStr,
-                  site: site,
-                  type: entryType,
-                  uid: currentUser.uid,
+                  site,
+                  type: 'Expense',
                   createdAt: Date.now()
                 });
               }
-            }
+            });
           });
 
-          if (extractedEntries.length === 0) {
-            return alert("No valid transaction entries found in Excel file.");
-          }
-
-          let count = 0;
-          const batchSize = 100;
-          for (let i = 0; i < extractedEntries.length; i += batchSize) {
-            const chunk = extractedEntries.slice(i, i + batchSize);
-            const batch = db.batch();
-            chunk.forEach(item => {
-              const ref = db.collection('expenses').doc();
-              batch.set(ref, item);
-            });
-            await batch.commit();
-            count += chunk.length;
-          }
-
-          alert(`Successfully uploaded all ${count} historical entries from Excel!`);
+          saveExpensesToStorage();
+          loadExpensesFromStorage();
+          alert("Excel imported successfully!");
           document.getElementById('excelImportInput').value = '';
-          await fetchExpenses();
         } catch (err) {
-          console.error("Excel import error:", err);
-          alert("Error importing Excel file. Please try again.");
+          alert("Error importing Excel file.");
         }
       };
       reader.readAsArrayBuffer(file);
@@ -883,16 +656,13 @@
               title: 'Ticked Expense Report',
               text: 'Expense summary report image attached.'
             });
-          } catch (err) {
-            console.log("Share canceled/failed:", err);
-          }
+          } catch (err) {}
         } else {
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
           link.download = fileName;
           link.click();
-          alert("JPEG image downloaded! Opening WhatsApp...");
-          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("Please find the attached expense report JPEG image.")}`);
+          alert("JPEG image downloaded!");
         }
       }, 'image/jpeg', 0.95);
     }
