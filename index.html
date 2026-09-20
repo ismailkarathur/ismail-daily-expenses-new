@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Expense Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+  <!-- Export Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased">
+
+  <!-- Auth Screen (Login / Forgot Password) -->
+  <div id="authContainer" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-white p-8 rounded-xl shadow-lg max-w-md w-full">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold mx-auto mb-2">₹</div>
+        <h2 class="text-2xl font-bold">Expense Tracker Login</h2>
+      </div>
+      
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Email</label>
+          <input type="email" id="loginEmail" required class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="loginPassword" required class="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+        </div>
+        <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700">Login</button>
+      </form>
+
+      <div class="mt-4 text-center text-sm">
+        <button onclick="handleForgotPassword()" class="text-blue-600 hover:underline">Forgot Password?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Dashboard -->
+  <div id="appContainer" class="hidden min-h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-blue-600 text-white p-4 shadow-md flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 bg-white text-blue-600 rounded-full flex items-center justify-center font-bold text-lg">₹</div>
+        <h1 class="text-xl font-bold">Daily Expense Tracker</h1>
+      </div>
+      <div class="flex items-center space-x-2">
+        <button onclick="openChangePasswordModal()" class="text-xs bg-blue-700 px-3 py-1.5 rounded hover:bg-blue-800">Change Password</button>
+        <button onclick="logout()" class="text-xs bg-red-600 px-3 py-1.5 rounded hover:bg-red-700">Logout</button>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-4 max-w-7xl mx-auto w-full space-y-6">
+      
+      <!-- Top Actions Bar -->
+      <div class="flex flex-wrap justify-between items-center gap-4 bg-white p-4 rounded-xl shadow-sm">
+        <button onclick="openExpenseModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 flex items-center gap-2">
+          <span>+</span> Add Expense
+        </button>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="shareSelectedWhatsApp()" class="bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600">
+            WhatsApp Share Selected
+          </button>
+          <button onclick="generateJPEGReport()" class="bg-purple-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-purple-700">
+            JPEG Report
+          </button>
+          <button onclick="exportToExcel()" class="bg-slate-700 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-800">
+            Export Excel/CSV
+          </button>
+          <label class="bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-300 cursor-pointer">
+            Restore Backup
+            <input type="file" id="restoreInput" onchange="restoreBackup(event)" accept=".json" class="hidden">
+          </label>
+        </div>
+      </div>
+
+      <!-- Filters Section -->
+      <div class="bg-white p-4 rounded-xl shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Search Keyword</label>
+          <input type="text" id="filterKeyword" oninput="applyFilters()" placeholder="Title, Category..." class="w-full p-2 border rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">Category</label>
+          <select id="filterCategory" onchange="applyFilters()" class="w-full p-2 border rounded-lg text-sm">
+            <option value="">All Categories</option>
+            <option value="Food">Food</option>
+            <option value="Travel">Travel</option>
+            <option value="Bills">Bills</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Others">Others</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">From Date</label>
+          <input type="date" id="filterFromDate" onchange="applyFilters()" class="w-full p-2 border rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-500 mb-1">To Date</label>
+          <input type="date" id="filterToDate" onchange="applyFilters()" class="w-full p-2 border rounded-lg text-sm">
+        </div>
+      </div>
+
+      <!-- Table Section -->
+      <div id="reportContainer" class="bg-white rounded-xl shadow-sm overflow-hidden p-4">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-lg">Expense History (Latest First)</h3>
+          <span id="totalAmountText" class="font-semibold text-blue-600">Total: ₹0</span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b text-xs font-semibold text-slate-600 uppercase">
+                <th class="p-3"><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+                <th class="p-3">Date</th>
+                <th class="p-3">Title</th>
+                <th class="p-3">Category</th>
+                <th class="p-3">Amount</th>
+                <th class="p-3">Attachment</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="expenseTableBody" class="divide-y text-sm">
+              <!-- Dynamic entries -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex justify-between items-center mt-4 pt-4 border-t text-sm">
+          <button onclick="prevPage()" id="btnPrev" class="px-3 py-1 bg-slate-200 rounded disabled:opacity-50">Previous</button>
+          <span id="pageIndicator" class="text-slate-600">Page 1</span>
+          <button onclick="nextPage()" id="btnNext" class="px-3 py-1 bg-slate-200 rounded disabled:opacity-50">Next</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Add/Edit Modal -->
+  <div id="expenseModal" class="fixed inset-0 bg-black/50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-lg w-full p-6 space-y-4">
+      <h3 id="modalTitle" class="text-xl font-bold">Add Expense</h3>
+      <form id="expenseForm" onsubmit="saveExpense(event)" class="space-y-3">
+        <input type="hidden" id="editDocId">
+        <div>
+          <label class="block text-sm font-medium mb-1">Title</label>
+          <input type="text" id="expenseTitle" required class="w-full p-2 border rounded-lg">
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-sm font-medium mb-1">Amount (₹)</label>
+            <input type="number" step="0.01" id="expenseAmount" required class="w-full p-2 border rounded-lg">
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-1">Category</label>
+            <select id="expenseCategory" required class="w-full p-2 border rounded-lg">
+              <option value="Food">Food</option>
+              <option value="Travel">Travel</option>
+              <option value="Bills">Bills</option>
+              <option value="Shopping">Shopping</option>
+              <option value="Others">Others</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Date</label>
+          <input type="date" id="expenseDate" required class="w-full p-2 border rounded-lg">
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Receipt / Attachment</label>
+          <input type="file" id="expenseFile" accept="image/*,application/pdf" capture="environment" class="w-full text-sm">
+        </div>
+        <div class="flex justify-end space-x-2 pt-4">
+          <button type="button" onclick="closeExpenseModal()" class="px-4 py-2 border rounded-lg">Cancel</button>
+          <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg">Save Expense</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // --- FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT.appspot.com",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    db.enablePersistence().catch(err => console.log("Persistence error:", err));
+
+    let currentUser = null;
+    let allExpenses = [];
+    let currentPage = 1;
+    const pageSize = 50;
+
+    auth.onAuthStateChanged(user => {
+      currentUser = user;
+      if (user) {
+        document.getElementById('authContainer').classList.add('hidden');
+        document.getElementById('appContainer').classList.remove('hidden');
+        listenToExpenses();
+      } else {
+        document.getElementById('authContainer').classList.remove('hidden');
+        document.getElementById('appContainer').classList.add('hidden');
+      }
+    });
+
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const pass = document.getElementById('loginPassword').value;
+      auth.signInWithEmailAndPassword(email, pass).catch(err => alert(err.message));
+    });
+
+    function handleForgotPassword() {
+      const email = prompt("Enter your email for password reset:");
+      if (email) auth.sendPasswordResetEmail(email).then(() => alert("Reset email sent!")).catch(err => alert(err.message));
+    }
+
+    function openChangePasswordModal() {
+      const newPass = prompt("Enter your new password:");
+      if (newPass && auth.currentUser) {
+        auth.currentUser.updatePassword(newPass).then(() => alert("Password updated successfully!")).catch(err => alert(err.message));
+      }
+    }
+
+    function logout() { auth.signOut(); }
+
+    function listenToExpenses() {
+      db.collection('expenses')
+        .where('uid', '==', currentUser.uid)
+        .orderBy('date', 'desc')
+        .onSnapshot(snapshot => {
+          allExpenses = [];
+          snapshot.forEach(doc => {
+            allExpenses.push({ id: doc.id, ...doc.data() });
+          });
+          renderTable();
+        });
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('expenseTableBody');
+      tbody.innerHTML = '';
+
+      const filtered = getFilteredData();
+      
+      const total = filtered.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
+      document.getElementById('totalAmountText').innerText = `Total: ₹${total.toFixed(2)}`;
+
+      const start = (currentPage - 1) * pageSize;
+      const paginatedData = filtered.slice(start, start + pageSize);
+
+      paginatedData.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-50";
+        tr.innerHTML = `
+          <td class="p-3"><input type="checkbox" class="entryCheckbox" value="${item.id}"></td>
+          <td class="p-3">${item.date}</td>
+          <td class="p-3 font-medium">${item.title}</td>
+          <td class="p-3"><span class="px-2 py-1 bg-slate-100 rounded text-xs">${item.category}</span></td>
+          <td class="p-3 font-bold text-slate-800">₹${parseFloat(item.amount).toFixed(2)}</td>
+          <td class="p-3">
+            ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-blue-600 underline text-xs">View File</a>` : '-'}
+          </td>
+          <td class="p-3 text-right space-x-2">
+            <button onclick="editExpense('${item.id}')" class="text-blue-600 hover:underline text-xs">Edit</button>
+            <button onclick="deleteExpense('${item.id}')" class="text-red-600 hover:underline text-xs">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('pageIndicator').innerText = `Page ${currentPage} of ${Math.ceil(filtered.length / pageSize) || 1}`;
+      document.getElementById('btnPrev').disabled = currentPage === 1;
+      document.getElementById('btnNext').disabled = start + pageSize >= filtered.length;
+    }
+
+    function getFilteredData() {
+      const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+      const category = document.getElementById('filterCategory').value;
+      const fromDate = document.getElementById('filterFromDate').value;
+      const toDate = document.getElementById('filterToDate').value;
+
+      return allExpenses.filter(item => {
+        const matchesKeyword = item.title.toLowerCase().includes(keyword) || item.category.toLowerCase().includes(keyword);
+        const matchesCategory = category === '' || item.category === category;
+        const matchesFrom = !fromDate || item.date >= fromDate;
+        const matchesTo = !toDate || item.date <= toDate;
+        return matchesKeyword && matchesCategory && matchesFrom && matchesTo;
+      });
+    }
+
+    function applyFilters() { currentPage = 1; renderTable(); }
+    function prevPage() { if (currentPage > 1) { currentPage--; renderTable(); } }
+    function nextPage() { currentPage++; renderTable(); }
+
+    function openExpenseModal() {
+      document.getElementById('editDocId').value = '';
+      document.getElementById('expenseForm').reset();
+      document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('modalTitle').innerText = "Add Expense";
+      document.getElementById('expenseModal').classList.remove('hidden');
+    }
+
+    function closeExpenseModal() { document.getElementById('expenseModal').classList.add('hidden'); }
+
+    async function saveExpense(e) {
+      e.preventDefault();
+      const id = document.getElementById('editDocId').value;
+      const title = document.getElementById('expenseTitle').value;
+      const amount = parseFloat(document.getElementById('expenseAmount').value);
+      const category = document.getElementById('expenseCategory').value;
+      const date = document.getElementById('expenseDate').value;
+      const fileInput = document.getElementById('expenseFile');
+
+      let fileUrl = '';
+      if (fileInput.files[0]) {
+        const file = fileInput.files[0];
+        const storageRef = storage.ref(`receipts/${currentUser.uid}/${Date.now()}_${file.name}`);
+        const snapshot = await storageRef.put(file);
+        fileUrl = await snapshot.ref.getDownloadURL();
+      }
+
+      const data = { title, amount, category, date, uid: currentUser.uid, updatedAt: new Date() };
+      if (fileUrl) data.fileUrl = fileUrl;
+
+      if (id) {
+        await db.collection('expenses').doc(id).update(data);
+      } else {
+        await db.collection('expenses').add(data);
+      }
+
+      closeExpenseModal();
+    }
+
+    function editExpense(id) {
+      const item = allExpenses.find(x => x.id === id);
+      if (!item) return;
+      document.getElementById('editDocId').value = item.id;
+      document.getElementById('expenseTitle').value = item.title;
+      document.getElementById('expenseAmount').value = item.amount;
+      document.getElementById('expenseCategory').value = item.category;
+      document.getElementById('expenseDate').value = item.date;
+      document.getElementById('modalTitle').innerText = "Edit Expense";
+      document.getElementById('expenseModal').classList.remove('hidden');
+    }
+
+    async function deleteExpense(id) {
+      if (confirm("Are you sure you want to delete this expense?")) {
+        await db.collection('expenses').doc(id).delete();
+      }
+    }
+
+    function getSelectedEntries() {
+      const checkboxes = document.querySelectorAll('.entryCheckbox:checked');
+      const selectedIds = Array.from(checkboxes).map(cb => cb.value);
+      return allExpenses.filter(item => selectedIds.includes(item.id));
+    }
+
+    function toggleSelectAll(master) {
+      document.querySelectorAll('.entryCheckbox').forEach(cb => cb.checked = master.checked);
+    }
+
+    function shareSelectedWhatsApp() {
+      const selected = getSelectedEntries();
+      if (selected.length === 0) return alert("Select at least one entry!");
+
+      let text = "*Expense Summary Report*\n\n";
+      let total = 0;
+      selected.forEach((item, idx) => {
+        text += `${idx + 1}. *${item.title}* - ₹${item.amount} (${item.date})\n`;
+        total += item.amount;
+      });
+      text += `\n*Total:* ₹${total.toFixed(2)}`;
+
+      const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      window.open(waUrl, '_blank');
+    }
+
+    function generateJPEGReport() {
+      const container = document.getElementById('reportContainer');
+      html2canvas(container).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `Expense_Report_${new Date().toISOString().slice(0,10)}.jpg`;
+        link.href = canvas.toDataURL('image/jpeg');
+        link.click();
+      });
+    }
+
+    function exportToExcel() {
+      const filtered = getFilteredData();
+      const ws = XLSX.utils.json_to_sheet(filtered);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+      XLSX.writeFile(wb, `Expenses_Backup_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+
+    function restoreBackup(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const data = JSON.parse(evt.target.result);
+        for (const item of data) {
+          delete item.id;
+          item.uid = currentUser.uid;
+          await db.collection('expenses').add(item);
+        }
+        alert("Backup restored successfully!");
+      };
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
