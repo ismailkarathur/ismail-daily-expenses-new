@@ -5,6 +5,913 @@
    ============================================================ */
 
 /* ---------------- FIREBASE CONFIG ---------------- */
+   
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ismail Expense Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              bg: '#121212',
+              card: '#1e1e1e',
+              border: '#2a2a2a',
+              accent: '#f59e0b',
+              income: '#22c55e',
+              expense: '#ef4444'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+  <!-- Export & Import Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body class="bg-[#121212] text-amber-50 min-h-screen font-sans antialiased pb-10">
+
+  <!-- Auth Screen -->
+  <div id="authContainer" class="min-h-screen flex items-center justify-center p-4">
+    <div class="bg-[#1e1e1e] p-8 rounded-2xl border border-[#2a2a2a] max-w-md w-full shadow-2xl">
+      <div class="text-center mb-6">
+        <div class="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center text-black text-3xl font-extrabold mx-auto mb-3 shadow-lg">₹</div>
+        <h2 class="text-2xl font-bold text-white">Ismail Expense Manager</h2>
+        <p class="text-xs text-amber-500/80 mt-1">Sign in to manage your cash flow</p>
+      </div>
+      
+      <form id="loginForm" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1">Email Address</label>
+          <input type="email" id="loginEmail" required class="w-full p-3 bg-[#121212] border border-[#333] rounded-xl text-white focus:border-amber-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1">Password</label>
+          <input type="password" id="loginPassword" required class="w-full p-3 bg-[#121212] border border-[#333] rounded-xl text-white focus:border-amber-500 outline-none">
+        </div>
+        <button type="submit" class="w-full bg-amber-500 text-black py-3 rounded-xl font-bold hover:bg-amber-400 transition">Login</button>
+      </form>
+
+      <div class="mt-4 text-center text-xs">
+        <button onclick="handleForgotPassword()" class="text-amber-500 hover:underline">Forgot Password?</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Dashboard -->
+  <div id="appContainer" class="hidden max-w-2xl mx-auto px-4 py-6 space-y-6">
+    
+    <!-- Top Header Profile Section -->
+    <div class="flex items-center justify-between border-b border-[#2a2a2a] pb-4">
+      <div>
+        <h1 class="text-2xl font-extrabold text-white tracking-wide">Ismail Expense Manager</h1>
+        <p class="text-xs text-amber-500/90 mt-0.5">Owner: <span class="font-semibold text-white">Ismail vk</span> • Role: <span class="font-semibold text-amber-400">Admin</span></p>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="openCategoryModal()" class="text-xs bg-[#2a2a2a] text-amber-400 px-3 py-2 rounded-xl border border-amber-500/20 hover:bg-amber-500/10 font-medium">+ Category</button>
+        <button onclick="logout()" class="text-xs bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-2 rounded-xl hover:bg-red-500/20">Logout</button>
+      </div>
+    </div>
+
+    <!-- Main Balance Card -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 shadow-xl space-y-5">
+      <div>
+        <span class="text-xs text-amber-500/80 uppercase font-bold tracking-wider">AVAILABLE BALANCE</span>
+        <div id="availableBalanceText" class="text-3xl font-black text-amber-400 mt-1">₹0.00</div>
+      </div>
+
+      <!-- Grid Cards -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">INCOME</span>
+          <div id="totalIncomeText" class="text-lg font-bold text-green-400 mt-0.5">₹0.00</div>
+        </div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">EXPENSES</span>
+          <div id="totalExpenseText" class="text-lg font-bold text-amber-500 mt-0.5">₹0.00</div>
+        </div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">TRANSACTIONS</span>
+          <div id="totalTxCountText" class="text-lg font-bold text-white mt-0.5">0</div>
+        </div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-3 rounded-xl">
+          <span class="text-[10px] text-gray-400 uppercase font-semibold">TOP CATEGORY</span>
+          <div id="topCategoryText" class="text-lg font-bold text-white mt-0.5">-</div>
+        </div>
+      </div>
+
+      <!-- Add Action Buttons -->
+      <div class="grid grid-cols-2 gap-3 pt-2">
+        <button onclick="openTransactionModal('Expense')" class="bg-amber-500 hover:bg-amber-400 text-black py-3 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg">
+          <span>-</span> Add Expense
+        </button>
+        <button onclick="openTransactionModal('Income')" class="bg-[#2a2a2a] hover:bg-[#333] text-white py-3 rounded-xl font-bold border border-[#3a3a3a] flex items-center justify-center gap-2">
+          <span>+</span> Add Income
+        </button>
+      </div>
+    </div>
+
+    <!-- Weekly Cashflow Chart -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-5 space-y-3">
+      <h3 class="text-sm font-bold text-white">Weekly cash flow</h3>
+      <div class="h-40 w-full">
+        <canvas id="cashflowChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Action Bar & Filters -->
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-4 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#2a2a2a] pb-3">
+        <h3 class="text-sm font-bold text-white">Transactions History</h3>
+        <div class="flex flex-wrap gap-2">
+          <label class="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-500/30 cursor-pointer flex items-center gap-1">
+            📥 Upload Excel
+            <input type="file" id="excelImportInput" onchange="importExcelFile(event)" accept=".xlsx, .xls, .csv" class="hidden">
+          </label>
+          <button onclick="shareSelectedJPEG()" class="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-500/30 flex items-center gap-1">
+            📷 Share JPEG
+          </button>
+          <button onclick="exportExcel()" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-500/30">
+            📊 Export Excel
+          </button>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <input type="text" id="filterKeyword" oninput="renderTable()" placeholder="Search..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+        <select id="filterCategory" onchange="renderTable()" class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+          <option value="">All Categories</option>
+        </select>
+        <input type="date" id="filterFromDate" onchange="renderTable()" class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+        <input type="date" id="filterToDate" onchange="renderTable()" class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+      </div>
+
+      <!-- Table Section -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead>
+            <tr class="text-gray-400 border-b border-[#2a2a2a] uppercase">
+              <th class="p-2"><input type="checkbox" id="selectAll" onclick="toggleSelectAll(this)"></th>
+              <th class="p-2">Date</th>
+              <th class="p-2">Category</th>
+              <th class="p-2">Description</th>
+              <th class="p-2">Site/Project</th>
+              <th class="p-2">Amount</th>
+              <th class="p-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="txTableBody" class="divide-y divide-[#2a2a2a]">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Printable/Capture View for JPEG Report -->
+  <div class="hidden">
+    <div id="jpegReportContainer" class="bg-white text-black p-6 w-[800px] font-sans">
+      <div class="border-b-2 border-black pb-3 mb-4">
+        <h2 class="text-2xl font-black uppercase tracking-tight">TICKED TRANSACTIONS</h2>
+        <div id="reportSubHeader" class="text-xs text-gray-600 font-semibold mt-1">Report Generated</div>
+      </div>
+
+      <table class="w-full text-left border-collapse border border-black text-xs">
+        <thead>
+          <tr class="bg-gray-100 border-b border-black font-bold">
+            <th class="border border-black p-2 text-center">Date</th>
+            <th class="border border-black p-2">Category</th>
+            <th class="border border-black p-2">Description</th>
+            <th class="border border-black p-2">Site / project</th>
+            <th class="border border-black p-2 text-right text-green-700">Income (₹)</th>
+            <th class="border border-black p-2 text-right text-red-700">Expense (₹)</th>
+            <th class="border border-black p-2 text-right">Balance (₹)</th>
+          </tr>
+        </thead>
+        <tbody id="reportTableBody">
+          <!-- Rows inserted dynamically -->
+        </tbody>
+        <tfoot>
+          <tr class="font-bold bg-gray-50 border-t-2 border-black">
+            <td colspan="4" class="border border-black p-2 text-right uppercase">TOTAL</td>
+            <td id="reportTotalIncome" class="border border-black p-2 text-right text-green-700">0.00</td>
+            <td id="reportTotalExpense" class="border border-black p-2 text-right text-red-700">0.00</td>
+            <td id="reportFinalBalance" class="border border-black p-2 text-right">0.00</td>
+          </tr>
+        </tfoot>
+      </table>
+      <p class="text-[10px] text-gray-500 mt-3 italic">* Selected ticked transactions summary report</p>
+    </div>
+  </div>
+
+  <!-- Transaction Modal (Add / Edit) -->
+  <div id="txModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <h3 id="txModalTitle" class="text-lg font-bold text-white">Add Entry</h3>
+      <form id="txForm" onsubmit="saveTransaction(event)" class="space-y-3">
+        <input type="hidden" id="editDocId">
+        <input type="hidden" id="txType" value="Expense">
+        
+        <div>
+          <label class="block text-xs font-medium text-gray-400 mb-1">Description / Title</label>
+          <input type="text" id="txTitle" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Amount (₹)</label>
+            <input type="number" step="0.01" id="txAmount" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Category</label>
+            <select id="txCategory" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+              <!-- Dynamic options -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1">Date</label>
+            <input type="date" id="txDate" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+          </div>
+          <div id="txSiteContainer">
+            <label class="block text-xs font-medium text-gray-400 mb-1">Site / Project</label>
+            <input type="text" id="txSite" placeholder="e.g. Modar, Recharge" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+          </div>
+        </div>
+
+        <div id="txFileContainer">
+          <label class="block text-xs font-medium text-gray-400 mb-1">Attachment (Camera / Photos / PDF Docs)</label>
+          <input type="file" id="txFile" accept="image/*,.pdf,application/pdf" capture="environment" class="w-full text-xs text-gray-400 border border-[#333] p-2 rounded-xl bg-[#121212]">
+        </div>
+
+        <div class="flex items-center justify-between pt-3">
+          <button type="button" id="deleteTxModalBtn" onclick="deleteTxFromModal()" class="px-3 py-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl text-xs font-semibold hover:bg-red-500/20 hidden">Delete</button>
+          <div class="flex gap-2 ml-auto">
+            <button type="button" onclick="closeTransactionModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs font-semibold">Cancel</button>
+            <button id="saveEntryBtn" type="submit" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400">Save Entry</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Category Modal -->
+  <div id="categoryModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <h3 class="text-lg font-bold text-white">Add New Category</h3>
+      <div class="space-y-3">
+        <input type="text" id="newCategoryName" placeholder="Category Name" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
+        <div class="flex justify-end gap-2">
+          <button onclick="closeCategoryModal()" class="px-4 py-2 border border-[#3a3a3a] text-gray-300 rounded-xl text-xs">Cancel</button>
+          <button onclick="saveNewCategory()" class="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs">Add Category</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2i0T8X2tlbyD0Cv4BclaXw-WV67W4rjg",
+      authDomain: "ismail-expense-manager.firebaseapp.com",
+      projectId: "ismail-expense-manager",
+      storageBucket: "ismail-expense-manager.firebasestorage.app",
+      messagingSenderId: "416995024743",
+      appId: "1:416995024743:web:b8ad4d4ac2aecc1e53d9c2",
+      measurementId: "G-DC3HQ68C7T"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    let currentUser = null;
+    let allTx = [];
+    let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
+    let chartInstance = null;
+    let unsubscribeListener = null;
+
+    const savedCats = localStorage.getItem('ismail_custom_cats');
+    if (savedCats) {
+      try { customCategories = JSON.parse(savedCats); } catch(e){}
+    }
+
+    auth.onAuthStateChanged(user => {
+      currentUser = user;
+      if (user) {
+        document.getElementById('authContainer').classList.add('hidden');
+        document.getElementById('appContainer').classList.remove('hidden');
+        populateCategoryDropdowns();
+        listenToData();
+      } else {
+        document.getElementById('authContainer').classList.remove('hidden');
+        document.getElementById('appContainer').classList.add('hidden');
+        if (unsubscribeListener) {
+          unsubscribeListener();
+          unsubscribeListener = null;
+        }
+      }
+    });
+
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value;
+      const pass = document.getElementById('loginPassword').value;
+      auth.signInWithEmailAndPassword(email, pass).catch(err => alert(err.message));
+    });
+
+    function handleForgotPassword() {
+      const email = prompt("Enter your email for reset:");
+      if (email) auth.sendPasswordResetEmail(email).then(() => alert("Reset email sent!")).catch(err => alert(err.message));
+    }
+
+    function logout() { 
+      if (unsubscribeListener) unsubscribeListener();
+      auth.signOut(); 
+    }
+
+    function populateCategoryDropdowns() {
+      const txCat = document.getElementById('txCategory');
+      const filterCat = document.getElementById('filterCategory');
+
+      txCat.innerHTML = '';
+      filterCat.innerHTML = '<option value="">All Categories</option>';
+
+      customCategories.forEach(cat => {
+        txCat.innerHTML += `<option value="${cat}">${cat}</option>`;
+        filterCat.innerHTML += `<option value="${cat}">${cat}</option>`;
+      });
+    }
+
+    function openCategoryModal() { document.getElementById('categoryModal').classList.remove('hidden'); }
+    function closeCategoryModal() { document.getElementById('categoryModal').classList.add('hidden'); }
+
+    function saveNewCategory() {
+      const name = document.getElementById('newCategoryName').value.trim();
+      if (name && !customCategories.includes(name)) {
+        customCategories.push(name);
+        localStorage.setItem('ismail_custom_cats', JSON.stringify(customCategories));
+        populateCategoryDropdowns();
+        document.getElementById('newCategoryName').value = '';
+        closeCategoryModal();
+      }
+    }
+
+    function listenToData() {
+      if (!currentUser) return;
+      if (unsubscribeListener) unsubscribeListener();
+
+      unsubscribeListener = db.collection('expenses')
+        .where('uid', '==', currentUser.uid)
+        .onSnapshot(snapshot => {
+          allTx = [];
+          snapshot.forEach(doc => {
+            const data = doc.data();
+            let formattedDate = data.date || new Date().toISOString().split('T')[0];
+            if (formattedDate.length > 10) formattedDate = formattedDate.slice(0, 10);
+
+            allTx.push({ 
+              id: doc.id, 
+              ...data,
+              date: formattedDate 
+            });
+          });
+
+          // Sort newest first (by date then creation time)
+          allTx.sort((a, b) => {
+            const dateA = new Date(a.date || 0);
+            const dateB = new Date(b.date || 0);
+            if (dateB - dateA !== 0) return dateB - dateA;
+            const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+            const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+            return timeB - timeB ? timeB - timeA : 0;
+          });
+
+          updateSummary();
+          renderTable();
+          renderChart();
+        }, err => console.error("Snapshot error:", err));
+    }
+
+    function updateSummary() {
+      let income = 0;
+      let expense = 0;
+      let catCounts = {};
+
+      allTx.forEach(t => {
+        const amt = parseFloat(t.amount || 0);
+        if (t.type === 'Income') {
+          income += amt;
+        } else {
+          expense += amt;
+          catCounts[t.category] = (catCounts[t.category] || 0) + amt;
+        }
+      });
+
+      const balance = income - expense;
+      document.getElementById('availableBalanceText').innerText = `₹${balance.toFixed(2)}`;
+      document.getElementById('totalIncomeText').innerText = `₹${income.toFixed(2)}`;
+      document.getElementById('totalExpenseText').innerText = `₹${expense.toFixed(2)}`;
+      document.getElementById('totalTxCountText').innerText = allTx.length;
+
+      let topCat = '-';
+      let maxVal = 0;
+      for (const [cat, val] of Object.entries(catCounts)) {
+        if (val > maxVal) { maxVal = val; topCat = cat; }
+      }
+      document.getElementById('topCategoryText').innerText = topCat;
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('txTableBody');
+      tbody.innerHTML = '';
+
+      const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+      const catFilter = document.getElementById('filterCategory').value;
+      const fromDate = document.getElementById('filterFromDate').value;
+      const toDate = document.getElementById('filterToDate').value;
+
+      const filtered = allTx.filter(item => {
+        const matchesKw = (item.title || '').toLowerCase().includes(keyword) || (item.category || '').toLowerCase().includes(keyword) || (item.site || '').toLowerCase().includes(keyword);
+        const matchesCat = !catFilter || item.category === catFilter;
+        const matchesFrom = !fromDate || item.date >= fromDate;
+        const matchesTo = !toDate || item.date <= toDate;
+        return matchesKw && matchesCat && matchesFrom && matchesTo;
+      });
+
+      filtered.forEach(item => {
+        const isInc = item.type === 'Income';
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-[#1a1a1a]";
+        tr.innerHTML = `
+          <td class="p-2"><input type="checkbox" class="txCheckbox" value="${item.id}"></td>
+          <td class="p-2 text-gray-300 font-mono">${item.date}</td>
+          <td class="p-2"><span class="px-2 py-0.5 bg-[#2a2a2a] text-amber-400 rounded text-[10px] font-medium">${item.category}</span></td>
+          <td class="p-2 font-medium text-white">${item.title}</td>
+          <td class="p-2 text-gray-400">${item.site || '-'}</td>
+          <td class="p-2 font-bold ${isInc ? 'text-green-400' : 'text-amber-500'}">
+            ${isInc ? '+' : '-'}₹${parseFloat(item.amount).toFixed(2)}
+          </td>
+          <td class="p-2 text-right space-x-2">
+            ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-amber-400 underline text-[10px]">File</a>` : ''}
+            <button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderChart() {
+      const ctx = document.getElementById('cashflowChart').getContext('2d');
+      if (chartInstance) chartInstance.destroy();
+
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      const dataVals = [0, 0, 0, 0, 0, 0, 0];
+
+      allTx.forEach(t => {
+        if (t.date) {
+          const d = new Date(t.date);
+          let dayIdx = d.getDay() - 1;
+          if (dayIdx === -1) dayIdx = 6;
+          dataVals[dayIdx] += parseFloat(t.amount || 0);
+        }
+      });
+
+      chartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: days,
+          datasets: [{
+            label: 'Expenses (₹)',
+            data: dataVals,
+            backgroundColor: '#f59e0b',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#888' } },
+            y: { grid: { color: '#2a2a2a' }, ticks: { color: '#888' } }
+          }
+        }
+      });
+    }
+
+    function openTransactionModal(type) {
+      document.getElementById('editDocId').value = '';
+      document.getElementById('txForm').reset();
+      document.getElementById('txType').value = type;
+      document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
+      
+      document.getElementById('deleteTxModalBtn').classList.add('hidden');
+
+      const siteContainer = document.getElementById('txSiteContainer');
+      const fileContainer = document.getElementById('txFileContainer');
+
+      if (type === 'Income') {
+        document.getElementById('txModalTitle').innerText = 'Add Income';
+        siteContainer.style.display = 'none';
+        fileContainer.style.display = 'none';
+      } else {
+        document.getElementById('txModalTitle').innerText = 'Add Expense';
+        siteContainer.style.display = 'block';
+        fileContainer.style.display = 'block';
+      }
+
+      document.getElementById('txModal').classList.remove('hidden');
+    }
+
+    function editTx(id) {
+      const item = allTx.find(x => x.id === id);
+      if (!item) return;
+
+      document.getElementById('editDocId').value = item.id;
+      document.getElementById('txTitle').value = item.title || '';
+      document.getElementById('txAmount').value = item.amount || '';
+      document.getElementById('txCategory').value = item.category || customCategories[0];
+      document.getElementById('txDate').value = item.date || new Date().toISOString().split('T')[0];
+      document.getElementById('txType').value = item.type || 'Expense';
+
+      document.getElementById('deleteTxModalBtn').classList.remove('hidden');
+
+      const siteContainer = document.getElementById('txSiteContainer');
+      const fileContainer = document.getElementById('txFileContainer');
+
+      if (item.type === 'Income') {
+        document.getElementById('txModalTitle').innerText = 'Edit Income';
+        siteContainer.style.display = 'none';
+        fileContainer.style.display = 'none';
+        document.getElementById('txSite').value = '';
+      } else {
+        document.getElementById('txModalTitle').innerText = 'Edit Expense';
+        siteContainer.style.display = 'block';
+        fileContainer.style.display = 'block';
+        document.getElementById('txSite').value = item.site || '';
+      }
+
+      document.getElementById('txModal').classList.remove('hidden');
+    }
+
+    function closeTransactionModal() { 
+      document.getElementById('txForm').reset();
+      document.getElementById('deleteTxModalBtn').classList.add('hidden');
+      document.getElementById('txModal').classList.add('hidden');
+      const saveBtn = document.getElementById('saveEntryBtn');
+      saveBtn.disabled = false;
+      saveBtn.innerText = 'Save Entry';
+    }
+
+    async function compressImage(file) {
+      if (!file || !file.type.startsWith('image/')) return file;
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target.result;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const maxWidth = 1000;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            canvas.toBlob((blob) => {
+              resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+            }, 'image/jpeg', 0.7);
+          };
+          img.onerror = () => resolve(file);
+        };
+        reader.onerror = () => resolve(file);
+      });
+    }
+
+    async function saveTransaction(e) {
+      e.preventDefault();
+      
+      const saveBtn = document.getElementById('saveEntryBtn');
+      saveBtn.disabled = true;
+      saveBtn.innerText = 'Saving...';
+
+      try {
+        const id = document.getElementById('editDocId').value;
+        const title = document.getElementById('txTitle').value;
+        const amount = parseFloat(document.getElementById('txAmount').value);
+        const category = document.getElementById('txCategory').value;
+        const dateInput = document.getElementById('txDate').value;
+        const type = document.getElementById('txType').value;
+        const site = type === 'Expense' ? document.getElementById('txSite').value : '';
+        const fileInput = document.getElementById('txFile');
+
+        let fileUrl = '';
+        if (type === 'Expense' && fileInput.files && fileInput.files[0]) {
+          let file = fileInput.files[0];
+          file = await compressImage(file);
+          
+          const storageRef = storage.ref(`receipts/${currentUser.uid}/${Date.now()}_${file.name}`);
+          const snapshot = await storageRef.put(file);
+          fileUrl = await snapshot.ref.getDownloadURL();
+        }
+
+        const data = { 
+          title, 
+          amount, 
+          category, 
+          date: dateInput, 
+          site, 
+          type, 
+          uid: currentUser.uid, 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        };
+        if (fileUrl) data.fileUrl = fileUrl;
+
+        if (id) {
+          await db.collection('expenses').doc(id).set(data, { merge: true });
+        } else {
+          await db.collection('expenses').add(data);
+        }
+
+        closeTransactionModal();
+      } catch (err) {
+        console.error("Save error:", err);
+        alert("Error saving transaction: " + err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.innerText = 'Save Entry';
+      }
+    }
+
+    async function deleteTxFromModal() {
+      const id = document.getElementById('editDocId').value;
+      if (!id) return;
+
+      if (confirm("Are you sure you want to delete this transaction?")) {
+        try {
+          await db.collection('expenses').doc(id).delete();
+          closeTransactionModal();
+        } catch (err) {
+          alert("Error deleting entry: " + err.message);
+        }
+      }
+    }
+
+    function toggleSelectAll(master) {
+      document.querySelectorAll('.txCheckbox').forEach(cb => cb.checked = master.checked);
+    }
+
+    function getSelectedItems() {
+      const selectedIds = Array.from(document.querySelectorAll('.txCheckbox:checked')).map(cb => cb.value);
+      return allTx.filter(t => selectedIds.includes(t.id));
+    }
+
+    // --- ROBUST EXCEL IMPORT FUNCTION ---
+    function importExcelFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+
+          let extractedEntries = [];
+
+          workbook.SheetNames.forEach(sheetName => {
+            const worksheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
+            
+            if (!rows || rows.length === 0) return;
+
+            let headerIdx = -1;
+            let colMap = { date: -1, title: -1, category: -1, site: -1, income: -1, expense: -1, amount: -1, type: -1 };
+
+            for (let i = 0; i < rows.length; i++) {
+              const r = rows[i];
+              if (!r) continue;
+              const rStr = r.map(c => String(c || '').toLowerCase().trim());
+              const hasDate = rStr.some(c => c.includes('date'));
+              const hasDesc = rStr.some(c => c.includes('description') || c.includes('title') || c.includes('expense') || c.includes('income'));
+              const isSummary = rStr.some(c => c === 'entries') && !rStr.some(c => c.includes('description'));
+
+              if (hasDate && hasDesc && !isSummary) {
+                headerIdx = i;
+                rStr.forEach((c, idx) => {
+                  if (c.includes('date')) colMap.date = idx;
+                  else if (c.includes('description') || c.includes('title')) colMap.title = idx;
+                  else if (c.includes('category')) colMap.category = idx;
+                  else if (c.includes('site') || c.includes('project')) colMap.site = idx;
+                  else if (c.includes('income')) colMap.income = idx;
+                  else if (c.includes('expense')) colMap.expense = idx;
+                  else if (c.includes('amount')) colMap.amount = idx;
+                  else if (c.includes('type')) colMap.type = idx;
+                });
+                break;
+              }
+            }
+
+            if (headerIdx === -1) {
+              for (let i = 0; i < rows.length; i++) {
+                const r = rows[i];
+                if (r && r.length >= 5 && String(r[0]).match(/\d{4}-\d{2}-\d{2}/)) {
+                  headerIdx = i - 1;
+                  colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5, amount: -1, type: -1 };
+                  break;
+                }
+              }
+            }
+
+            const searchStart = headerIdx !== -1 ? headerIdx + 1 : 0;
+            for (let i = searchStart; i < rows.length; i++) {
+              const r = rows[i];
+              if (!r || r.length === 0) continue;
+
+              let rawDate = colMap.date !== -1 && colMap.date < r.length ? r[colMap.date] : r[0];
+              if (!rawDate) continue;
+
+              let dateStr = String(rawDate).trim();
+              if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
+              if (!dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
+
+              const title = colMap.title !== -1 && colMap.title < r.length && r[colMap.title] ? String(r[colMap.title]).trim() : (r[1] ? String(r[1]).trim() : 'Excel Import');
+              const category = colMap.category !== -1 && colMap.category < r.length && r[colMap.category] ? String(r[colMap.category]).trim() : (r[2] ? String(r[2]).trim() : 'Others');
+              const site = colMap.site !== -1 && colMap.site < r.length && r[colMap.site] ? String(r[colMap.site]).trim() : (r[3] ? String(r[3]).trim() : '');
+
+              let incVal = colMap.income !== -1 && colMap.income < r.length && r[colMap.income] ? parseFloat(String(r[colMap.income]).replace(/[^0-9.]/g, '')) || 0 : (r[4] ? parseFloat(String(r[4]).replace(/[^0-9.]/g, '')) || 0 : 0);
+              let expVal = colMap.expense !== -1 && colMap.expense < r.length && r[colMap.expense] ? parseFloat(String(r[colMap.expense]).replace(/[^0-9.]/g, '')) || 0 : (r[5] ? parseFloat(String(r[5]).replace(/[^0-9.]/g, '')) || 0 : 0);
+
+              let entryType = 'Expense';
+              let finalAmount = 0;
+
+              if (incVal > 0) {
+                entryType = 'Income';
+                finalAmount = incVal;
+              } else if (expVal > 0) {
+                entryType = 'Expense';
+                finalAmount = expVal;
+              }
+
+              if (finalAmount > 0) {
+                extractedEntries.push({
+                  title: title,
+                  amount: finalAmount,
+                  category: category,
+                  date: dateStr,
+                  site: site,
+                  type: entryType,
+                  uid: currentUser.uid,
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+              }
+            }
+          });
+
+          if (extractedEntries.length === 0) {
+            return alert("No valid transaction entries found in Excel file.");
+          }
+
+          let count = 0;
+          const batchSize = 100;
+          for (let i = 0; i < extractedEntries.length; i += batchSize) {
+            const chunk = extractedEntries.slice(i, i + batchSize);
+            const batch = db.batch();
+            chunk.forEach(item => {
+              const ref = db.collection('expenses').doc();
+              batch.set(ref, item);
+            });
+            await batch.commit();
+            count += chunk.length;
+          }
+
+          alert(`Successfully uploaded all ${count} historical entries from Excel!`);
+          document.getElementById('excelImportInput').value = '';
+        } catch (err) {
+          console.error("Excel import error:", err);
+          alert("Error importing Excel file. Please try again.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // --- SHARE AS JPEG ---
+    async function shareSelectedJPEG() {
+      const selected = getSelectedItems();
+      if (selected.length === 0) return alert("Select at least one entry using checkboxes!");
+
+      selected.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      const tbody = document.getElementById('reportTableBody');
+      tbody.innerHTML = '';
+
+      let totalInc = 0;
+      let totalExp = 0;
+      let runningBal = 0;
+
+      selected.forEach(item => {
+        const amt = parseFloat(item.amount || 0);
+        let incText = '-';
+        let expText = '-';
+
+        if (item.type === 'Income') {
+          incText = amt.toFixed(2);
+          totalInc += amt;
+          runningBal += amt;
+        } else {
+          expText = amt.toFixed(2);
+          totalExp += amt;
+          runningBal -= amt;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-black text-xs";
+        tr.innerHTML = `
+          <td class="border border-black p-2 text-center whitespace-nowrap font-mono">${item.date}</td>
+          <td class="border border-black p-2 capitalize">${item.category}</td>
+          <td class="border border-black p-2 font-medium">${item.title}</td>
+          <td class="border border-black p-2">${item.site || '-'}</td>
+          <td class="border border-black p-2 text-right font-mono">${incText}</td>
+          <td class="border border-black p-2 text-right font-mono">${expText}</td>
+          <td class="border border-black p-2 text-right font-mono font-bold">${runningBal.toFixed(2)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('reportTotalIncome').innerText = totalInc.toFixed(2);
+      document.getElementById('reportTotalExpense').innerText = totalExp.toFixed(2);
+      document.getElementById('reportFinalBalance').innerText = runningBal.toFixed(2);
+      document.getElementById('reportSubHeader').innerText = `${selected.length} ticked entries summary report`;
+
+      const reportElem = document.getElementById('jpegReportContainer');
+      reportElem.parentElement.classList.remove('hidden');
+
+      const canvas = await html2canvas(reportElem, { scale: 2 });
+      reportElem.parentElement.classList.add('hidden');
+
+      canvas.toBlob(async (blob) => {
+        const fileName = `Expense_Report_${new Date().toISOString().slice(0,10)}.jpg`;
+        const file = new File([blob], fileName, { type: 'image/jpeg' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({
+              files: [file],
+              title: 'Ticked Expense Report',
+              text: 'Expense summary report image attached.'
+            });
+          } catch (err) {
+            console.log("Share canceled/failed:", err);
+          }
+        } else {
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = fileName;
+          link.click();
+          alert("JPEG image downloaded! Opening WhatsApp...");
+          window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent("Please find the attached expense report JPEG image.")}`);
+        }
+      }, 'image/jpeg', 0.95);
+    }
+
+    function exportExcel() {
+      const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
+      const ws = XLSX.utils.json_to_sheet(selected);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+      XLSX.writeFile(wb, `Ismail_Expenses_${new Date().toISOString().slice(0,10)}.xlsx`);
+    }
+  </script>
+</body>
+</html>
 
 const firebaseConfig = {
   apiKey: "AIzaSyA2i0T8X2tlbyD0Cv4BclaXw-WV67W4rjg",
