@@ -71,11 +71,17 @@
             ⋮
           </button>
           <!-- Dropdown Menu -->
-          <div id="topMenuDropdown" class="hidden absolute right-0 mt-2 w-48 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-2xl py-1 z-50 text-xs">
+          <div id="topMenuDropdown" class="hidden absolute right-0 mt-2 w-52 bg-[#1e1e1e] border border-[#2a2a2a] rounded-xl shadow-2xl py-1 z-50 text-xs">
             <button onclick="openCustomModal('mailLogin')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Mail ID Login</button>
             <button onclick="openCustomModal('adminLogin')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Admin Login</button>
             <button onclick="openCustomModal('forgotPassword')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Forgot Password</button>
-            <button onclick="openCustomModal('sendToMail')" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-gray-200">Send to Mail</button>
+            <div class="border-t border-[#2a2a2a] my-1"></div>
+            <!-- JSON Options -->
+            <label class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-amber-400 cursor-pointer block">
+              📥 Import JSON File
+              <input type="file" id="jsonImportInput" onchange="importJsonFile(event)" accept=".json" class="hidden">
+            </label>
+            <button onclick="exportJsonFile()" class="w-full text-left px-4 py-2.5 hover:bg-[#2a2a2a] text-amber-400">📤 Export JSON File</button>
             <div class="border-t border-[#2a2a2a] my-1"></div>
             <button onclick="clearAllTransactions()" class="w-full text-left px-4 py-2.5 hover:bg-red-500/10 text-red-400 font-semibold">🗑️ Clear All Data</button>
           </div>
@@ -313,7 +319,6 @@
     const app = initializeApp(firebaseConfig);
     const auth = getAuth(app);
     
-    // Enabling offline persistence for Firestore
     const db = initializeFirestore(app, {
       localCache: persistentLocalCache({
         tabManager: persistentMultipleTabManager()
@@ -339,7 +344,7 @@
     window.getDownloadURL = getDownloadURL;
 
     onAuthStateChanged(auth, (user) => {
-      if (user) {
+      if (user || !navigator.onLine) {
         document.getElementById('authScreen').classList.add('hidden');
         document.getElementById('appContainer').classList.remove('hidden');
         loadDataFromFirebase();
@@ -362,9 +367,9 @@
         try { customCategories = JSON.parse(savedCats); } catch(e){}
       }
       populateCategoryDropdowns();
+      loadDataFromFirebase();
     });
 
-    // Listen to online event to auto sync offline saved entries
     window.addEventListener('online', async () => {
       console.log("Internet restored! Syncing offline transactions...");
       await syncOfflineTransactions();
@@ -391,16 +396,13 @@
 
       if (type === 'mailLogin') {
         title.innerText = 'Mail ID Login';
-        body.innerHTML = `<p class="text-gray-300">You are currently logged in via email authentication. Use the main login screen if you want to switch accounts.</p>`;
+        body.innerHTML = `<p class="text-gray-300">You are currently logged in via email authentication.</p>`;
       } else if (type === 'adminLogin') {
         title.innerText = 'Admin Login Access';
-        body.innerHTML = `<p class="text-gray-300">Admin controls and elevated permissions are active for the registered owner account (Ismail vk).</p>`;
+        body.innerHTML = `<p class="text-gray-300">Admin controls are active for Ismail vk.</p>`;
       } else if (type === 'forgotPassword') {
         title.innerText = 'Forgot Password';
-        body.innerHTML = `<p class="text-gray-300">To reset your password, please use the Firebase authentication recovery link or contact support.</p>`;
-      } else if (type === 'sendToMail') {
-        title.innerText = 'Send Summary to Mail';
-        body.innerHTML = `<p class="text-gray-300">Export your data to Excel or share the JPEG report using the buttons on the dashboard to send it via email/WhatsApp.</p>`;
+        body.innerHTML = `<p class="text-gray-300">Please use Firebase recovery link.</p>`;
       }
     }
 
@@ -456,15 +458,19 @@
 
     async function loadDataFromFirebase() {
       try {
-        const q = window.query(window.collection(window.db, "transactions"));
-        const querySnapshot = await window.getDocs(q);
-        allTx = [];
-        querySnapshot.forEach((docSnap) => {
-          allTx.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        
-        // Include any pending offline items locally
         let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+        
+        if (navigator.onLine && window.db) {
+          const q = window.query(window.collection(window.db, "transactions"));
+          const querySnapshot = await window.getDocs(q);
+          allTx = [];
+          querySnapshot.forEach((docSnap) => {
+            allTx.push({ id: docSnap.id, ...docSnap.data() });
+          });
+        } else {
+          allTx = [];
+        }
+
         if(offlineData.length > 0) {
           allTx = [...offlineData, ...allTx];
         }
@@ -474,8 +480,7 @@
         renderTable();
         renderChart();
       } catch (err) {
-        console.error("Offline mode or load error:", err);
-        // Fallback to offline stored data if offline
+        console.log("Using local offline storage data fallback");
         let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
         allTx = offlineData;
         updateSummary();
@@ -485,17 +490,17 @@
     }
 
     async function clearAllTransactions() {
-      if (confirm("തീർച്ചയായും എല്ലാ എൻട്രികളും ഡിലീറ്റ് ചെയ്യണമെന്നുണ്ടോ? (Are you sure you want to delete all entries?)")) {
+      if (confirm("തീർച്ചയായും എല്ലാ എൻട്രികളും ഡിലീറ്റ് ചെയ്യണമെന്നുണ്ടോ?")) {
         try {
-          const q = window.query(window.collection(window.db, "transactions"));
-          const querySnapshot = await window.getDocs(q);
-          
-          let deletePromises = [];
-          querySnapshot.forEach((docSnap) => {
-            deletePromises.push(window.deleteDoc(window.doc(window.db, "transactions", docSnap.id)));
-          });
-
-          await Promise.all(deletePromises);
+          if (navigator.onLine) {
+            const q = window.query(window.collection(window.db, "transactions"));
+            const querySnapshot = await window.getDocs(q);
+            let deletePromises = [];
+            querySnapshot.forEach((docSnap) => {
+              deletePromises.push(window.deleteDoc(window.doc(window.db, "transactions", docSnap.id)));
+            });
+            await Promise.all(deletePromises);
+          }
           localStorage.removeItem('ismail_offline_tx');
           alert("എല്ലാ ട്രാൻസാക്ഷൻസും വിജയകരമായി ഡിലീറ്റ് ചെയ്തു!");
           loadDataFromFirebase();
@@ -634,7 +639,7 @@
       
       const fileContainer = document.getElementById('existingFileLink');
       if (item.fileUrl) {
-        fileContainer.innerHTML = `<a href="${item.fileUrl}" target="_blank" class="text-blue-400 underline">View current attached file</a>`;
+        fileContainer.innerHTML = `<a href="${item.fileUrl}" target="_blank" class="text-blue-400 underline">View file</a>`;
       } else {
         fileContainer.innerHTML = '';
       }
@@ -681,17 +686,18 @@
           fileUrl = existingItem.fileUrl || '';
         }
 
-        if (fileInput.files && fileInput.files[0]) {
-          const file = fileInput.files[0];
-          const storageRef = window.ref(window.storage, `receipts/${Date.now()}_${file.name}`);
-          const snapshot = await window.uploadBytes(storageRef, file);
-          fileUrl = await window.getDownloadURL(snapshot.ref);
+        if (fileInput.files && fileInput.files[0] && navigator.onLine) {
+          try {
+            const file = fileInput.files[0];
+            const storageRef = window.ref(window.storage, `receipts/${Date.now()}_${file.name}`);
+            const snapshot = await window.uploadBytes(storageRef, file);
+            fileUrl = await window.getDownloadURL(snapshot.ref);
+          } catch(err) { console.log("File upload skipped due to network"); }
         }
 
         const dataPayload = { title, amount, category, date, site, type, fileUrl, createdAt: Date.now() };
 
-        // Handle Offline State Saving
-        if (!navigator.onLine && !id) {
+        if (!navigator.onLine) {
           dataPayload.isOffline = true;
           let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
           offlineData.push(dataPayload);
@@ -699,7 +705,7 @@
 
           closeTransactionModal();
           loadDataFromFirebase();
-          alert("ഇന്റർനെറ്റ് ഇല്ല! ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തിട്ടുണ്ട്. നെറ്റ് കണക്ഷൻ വരുമ്പോൾ ഓട്ടോമാറ്റിക്കായി സിങ്ക് ആകും.");
+          alert("ഇന്റർനെറ്റ് കണക്ഷൻ ഇല്ല! എങ്കിലും ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തിട്ടുണ്ട്. നെറ്റ് വരുമ്പോൾ അത് സിങ്ക് ആകും.");
           return;
         }
 
@@ -708,10 +714,10 @@
         } else {
           await window.addDoc(window.collection(window.db, "transactions"), dataPayload);
         }
+        
         closeTransactionModal();
         loadDataFromFirebase();
       } catch (err) {
-        // Fallback to offline storage if network request fails abruptly
         if (!id) {
           const dataPayload = { title, amount, category, date, site, type, fileUrl: '', createdAt: Date.now(), isOffline: true };
           let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
@@ -719,7 +725,7 @@
           localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
           closeTransactionModal();
           loadDataFromFirebase();
-          alert("നെറ്റ്വർക്ക് പ്രശ്നം മൂലമുള്ള എയർ ഒഴിവാക്കാൻ ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തു. നെറ്റ് വരുമ്പോൾ സിങ്ക് ആകും.");
+          alert("നെറ്റ്വർക്ക് പ്രശ്നം കാരണം ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തു.");
         } else {
           alert("Error saving: " + err.message);
         }
@@ -729,7 +735,6 @@
       }
     }
 
-    // Function to sync offline entries when internet reconnects
     async function syncOfflineTransactions() {
       let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
       if (offlineData.length === 0) return;
@@ -740,7 +745,6 @@
           delete item.isOffline;
           await window.addDoc(window.collection(window.db, "transactions"), item);
         } catch (err) {
-          console.error("Sync failed for item, will retry:", err);
           item.isOffline = true;
           remainingOffline.push(item);
         }
@@ -748,9 +752,6 @@
 
       localStorage.setItem('ismail_offline_tx', JSON.stringify(remainingOffline));
       loadDataFromFirebase();
-      if(remainingOffline.length === 0) {
-        console.log("All offline transactions synced successfully to Firebase!");
-      }
     }
 
     async function deleteTxFromModal() {
@@ -758,7 +759,12 @@
       if (!id) return;
       if (confirm("Delete this transaction?")) {
         try {
-          await window.deleteDoc(window.doc(window.db, "transactions", id));
+          if (navigator.onLine) {
+            await window.deleteDoc(window.doc(window.db, "transactions", id));
+          } else {
+            alert("ഇന്റർനെറ്റ് ഇല്ലാത്ത സമയത്ത് ഡിലീറ്റ് ചെയ്യാൻ സാധിക്കില്ല.");
+            return;
+          }
           closeTransactionModal();
           loadDataFromFirebase();
         } catch(err) {
@@ -775,6 +781,62 @@
       const selectedIds = Array.from(document.querySelectorAll('.txCheckbox:checked')).map(cb => cb.value);
       return allTx.filter(t => selectedIds.includes(t.id) || selectedIds.includes(String(t.createdAt)));
     }
+
+    // --- JSON IMPORT & EXPORT FUNCTIONS ---
+    function exportJsonFile() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allTx, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `Ismail_Expenses_Backup_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    async function importJsonFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const importedData = JSON.parse(evt.target.result);
+          if (!Array.isArray(importedData)) {
+            throw new Error("Invalid JSON format. Expected an array of transactions.");
+          }
+
+          let addedCount = 0;
+          for (const item of importedData) {
+            const payload = {
+              title: item.title || 'Untitled',
+              amount: parseFloat(item.amount || 0),
+              category: item.category || 'Others',
+              date: item.date || new Date().toISOString().slice(0,10),
+              site: item.site || '',
+              type: item.type || 'Expense',
+              fileUrl: item.fileUrl || '',
+              createdAt: item.createdAt || Date.now() + addedCount
+            };
+
+            if (navigator.onLine && window.db) {
+              await window.addDoc(window.collection(window.db, "transactions"), payload);
+            } else {
+              let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+              offlineData.push({ ...payload, isOffline: true });
+              localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+            }
+            addedCount++;
+          }
+
+          loadDataFromFirebase();
+          alert(`Successfully imported ${addedCount} transactions from JSON!`);
+          document.getElementById('jsonImportInput').value = '';
+        } catch (err) {
+          alert("Error importing JSON file: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+    // ---------------------------------------
 
     function importExcelFile(e) {
       const file = e.target.files[0];
@@ -837,16 +899,28 @@
 
               if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
 
+              const payload = { title, category, date: dateStr, site: '', type: 'Income', createdAt: Date.now() + totalImported };
               if (incomeAmt > 0) {
-                await window.addDoc(window.collection(window.db, "transactions"), {
-                  title, amount: incomeAmt, category, date: dateStr, site: '', type: 'Income', createdAt: Date.now() + totalImported
-                });
+                payload.amount = incomeAmt;
+                payload.type = 'Income';
+                if (navigator.onLine) await window.addDoc(window.collection(window.db, "transactions"), payload);
+                else {
+                  let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+                  offlineData.push({ ...payload, isOffline: true });
+                  localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+                }
                 totalImported++;
               }
               if (expenseAmt > 0) {
-                await window.addDoc(window.collection(window.db, "transactions"), {
-                  title, amount: expenseAmt, category, date: dateStr, site, type: 'Expense', createdAt: Date.now() + totalImported
-                });
+                payload.amount = expenseAmt;
+                payload.type = 'Expense';
+                payload.site = site;
+                if (navigator.onLine) await window.addDoc(window.collection(window.db, "transactions"), payload);
+                else {
+                  let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+                  offlineData.push({ ...payload, isOffline: true });
+                  localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+                }
                 totalImported++;
               }
             }
@@ -912,7 +986,7 @@
     }
 
     function exportExcel() {
-      const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
+      const selected = getSelectedItems().length > 0 ? getSelectedItems() - allTx : allTx;
       const ws = XLSX.utils.json_to_sheet(selected);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Expenses");
