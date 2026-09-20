@@ -553,7 +553,7 @@
       const toDate = document.getElementById('filterToDate').value;
 
       const filtered = allTx.filter(item => {
-        const matchesKw = (item.title || '').toLowerCase().includes(keyword) || (item.category || '').toLowerCase().includes(keyword) || (item.site || '').toLowerCase().includes(keyword);
+        const matchesKw = (item.title || item.description || '').toLowerCase().includes(keyword) || (item.category || '').toLowerCase().includes(keyword) || (item.site || item.siteProject || '').toLowerCase().includes(keyword);
         const matchesCat = !catFilter || item.category === catFilter;
         const matchesFrom = !fromDate || item.date >= fromDate;
         const matchesTo = !toDate || item.date <= toDate;
@@ -562,6 +562,8 @@
 
       filtered.forEach(item => {
         const isInc = item.type === 'Income';
+        const displayTitle = item.title || item.description || '';
+        const displaySite = item.site || item.siteProject || '-';
         const tr = document.createElement('tr');
         tr.className = "hover:bg-[#1a1a1a]";
         tr.innerHTML = `
@@ -569,12 +571,12 @@
           <td class="p-2 text-gray-300 font-mono">${item.date}</td>
           <td class="p-2"><span class="px-2 py-0.5 bg-[#2a2a2a] text-amber-400 rounded text-[10px] font-medium">${item.category}</span></td>
           <td class="p-2 font-medium text-white">
-            ${item.title} ${item.isOffline ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-1 rounded ml-1">Offline</span>' : ''}
+            ${displayTitle} ${item.isOffline ? '<span class="text-[9px] bg-amber-500/20 text-amber-400 px-1 rounded ml-1">Offline</span>' : ''}
             ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="ml-1 text-[10px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded">📎 View File</a>` : ''}
           </td>
-          <td class="p-2 text-gray-400">${item.site || '-'}</td>
+          <td class="p-2 text-gray-400">${displaySite}</td>
           <td class="p-2 font-bold ${isInc ? 'text-green-400' : 'text-amber-500'}">
-            ${isInc ? '+' : '-'}₹${parseFloat(item.amount).toFixed(2)}
+            ${isInc ? '+' : '-'}₹${parseFloat(Math.abs(item.amount)).toFixed(2)}
           </td>
           <td class="p-2 text-right space-x-2">
             ${item.id ? `<button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>` : '<span class="text-gray-500 text-[10px]">Pending Sync</span>'}
@@ -594,7 +596,7 @@
           const d = new Date(t.date);
           let dayIdx = d.getDay() - 1;
           if (dayIdx === -1) dayIdx = 6;
-          dataVals[dayIdx] += parseFloat(t.amount || 0);
+          dataVals[dayIdx] += parseFloat(Math.abs(t.amount) || 0);
         }
       });
       chartInstance = new Chart(ctx, {
@@ -637,8 +639,8 @@
       const item = allTx.find(x => x.id === id);
       if (!item) return;
       document.getElementById('editDocId').value = item.id;
-      document.getElementById('txTitle').value = item.title || '';
-      document.getElementById('txAmount').value = item.amount || '';
+      document.getElementById('txTitle').value = item.title || item.description || '';
+      document.getElementById('txAmount').value = Math.abs(item.amount || 0);
       document.getElementById('txCategory').value = item.category || customCategories[0];
       document.getElementById('txDate').value = item.date || new Date().toISOString().split('T')[0];
       document.getElementById('txType').value = item.type || 'Expense';
@@ -659,7 +661,7 @@
       } else {
         document.getElementById('txModalTitle').innerText = 'Edit Expense';
         siteContainer.style.display = 'block';
-        document.getElementById('txSite').value = item.site || '';
+        document.getElementById('txSite').value = item.site || item.siteProject || '';
       }
       document.getElementById('txModal').classList.remove('hidden');
     }
@@ -675,7 +677,7 @@
       e.preventDefault();
       const id = document.getElementById('editDocId').value;
       const title = document.getElementById('txTitle').value;
-      const amount = parseFloat(document.getElementById('txAmount').value);
+      const amountVal = parseFloat(document.getElementById('txAmount').value);
       const category = document.getElementById('txCategory').value;
       const date = document.getElementById('txDate').value;
       const type = document.getElementById('txType').value;
@@ -702,7 +704,18 @@
           } catch(err) { console.log("File upload skipped due to network"); }
         }
 
-        const dataPayload = { title, amount, category, date, site, type, fileUrl, createdAt: Date.now() };
+        const dataPayload = { 
+          title, 
+          description: title,
+          amount: type === 'Income' ? amountVal : -amountVal, 
+          category, 
+          date, 
+          site, 
+          siteProject: site, 
+          type, 
+          fileUrl, 
+          createdAt: Date.now() 
+        };
 
         if (!navigator.onLine) {
           dataPayload.isOffline = true;
@@ -712,7 +725,7 @@
 
           closeTransactionModal();
           loadDataFromFirebase();
-          alert("ഇന്റർനെറ്റ് കണക്ഷൻ ഇല്ല! എങ്കിലും ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തിട്ടുണ്ട്. നെറ്റ് വരുമ്പോൾ അത് സിങ്ക് ആകും.");
+          alert("ഇന്റർനെറ്റ് കണക്ഷൻ ഇല്ല! ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തിട്ടുണ്ട്.");
           return;
         }
 
@@ -726,7 +739,7 @@
         loadDataFromFirebase();
       } catch (err) {
         if (!id) {
-          const dataPayload = { title, amount, category, date, site, type, fileUrl: '', createdAt: Date.now(), isOffline: true };
+          const dataPayload = { title, description: title, amount: type === 'Income' ? amountVal : -amountVal, category, date, site, siteProject: site, type, fileUrl: '', createdAt: Date.now(), isOffline: true };
           let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
           offlineData.push(dataPayload);
           localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
@@ -808,18 +821,20 @@
         try {
           const importedData = JSON.parse(evt.target.result);
           if (!Array.isArray(importedData)) {
-            throw new Error("Invalid JSON format. Expected an array of transactions.");
+            throw new Error("Invalid JSON format.");
           }
 
           let addedCount = 0;
           for (const item of importedData) {
             const payload = {
-              title: item.title || 'Untitled',
+              title: item.title || item.description || 'Untitled',
+              description: item.description || item.title || 'Untitled',
               amount: parseFloat(item.amount || 0),
               category: item.category || 'Others',
               date: item.date || new Date().toISOString().slice(0,10),
-              site: item.site || '',
-              type: item.type || 'Expense',
+              site: item.site || item.siteProject || '',
+              siteProject: item.siteProject || item.site || '',
+              type: item.type || (parseFloat(item.amount) >= 0 ? 'Income' : 'Expense'),
               fileUrl: item.fileUrl || '',
               createdAt: item.createdAt || Date.now() + addedCount
             };
@@ -845,7 +860,7 @@
     }
     // ---------------------------------------
 
-    function importExcelFile(e) {
+    async function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
       const reader = new FileReader();
@@ -864,7 +879,6 @@
             let headerIdx = -1;
             let colMap = {};
 
-            // Intelligent header detection
             for (let i = 0; i < rows.length; i++) {
               const r = rows[i];
               if (!r) continue;
@@ -884,7 +898,6 @@
               }
             }
 
-            // Fallback if explicit header names weren't found perfectly
             if (headerIdx === -1 && rows.length > 4) {
               headerIdx = 4;
               colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5 };
@@ -921,6 +934,7 @@
                 site = String(r[3]).trim();
               }
 
+              // Explicitly reading correct income/expense columns (col 4 and col 5)
               if (colMap.income !== undefined && r[colMap.income] !== undefined) {
                 incomeAmt = parseFloat(String(r[colMap.income] || '0').replace(/[^0-9.]/g, '')) || 0;
               } else if (r[4]) {
@@ -939,10 +953,12 @@
               if (incomeAmt > 0) {
                 parsedTransactions.push({
                   title: title || 'Income',
+                  description: title || 'Income',
                   amount: incomeAmt,
                   category: category || 'Salary',
                   date: dateStr,
                   site: site && site !== 'nan' ? site : '',
+                  siteProject: site && site !== 'nan' ? site : '',
                   type: 'Income',
                   createdAt: Date.now() + indexCounter++
                 });
@@ -951,10 +967,12 @@
               if (expenseAmt > 0) {
                 parsedTransactions.push({
                   title: title || 'Expense',
-                  amount: expenseAmt,
+                  description: title || 'Expense',
+                  amount: -expenseAmt,
                   category: category || 'Expense',
                   date: dateStr,
                   site: site && site !== 'nan' ? site : '',
+                  siteProject: site && site !== 'nan' ? site : '',
                   type: 'Expense',
                   createdAt: Date.now() + indexCounter++
                 });
@@ -962,11 +980,9 @@
             }
           }
 
-          // Save all parsed transactions efficiently in bulk local storage & Firestore fallback
           let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
           
           if (navigator.onLine && window.db) {
-            // Push directly to Firestore in batches or chunks to prevent timeout
             for (let item of parsedTransactions) {
               await window.addDoc(window.collection(window.db, "transactions"), item);
             }
@@ -993,7 +1009,7 @@
       tbody.innerHTML = '';
       let totalInc = 0, totalExp = 0, runningBal = 0;
       selected.forEach(item => {
-        const amt = parseFloat(item.amount || 0);
+        const amt = parseFloat(Math.abs(item.amount) || 0);
         let incText = '-', expText = '-';
         if (item.type === 'Income') { incText = amt.toFixed(2); totalInc += amt; runningBal += amt; }
         else { expText = amt.toFixed(2); totalExp += amt; runningBal -= amt; }
@@ -1002,8 +1018,8 @@
         tr.innerHTML = `
           <td class="border border-black p-2 text-center font-mono">${item.date}</td>
           <td class="border border-black p-2 capitalize">${item.category}</td>
-          <td class="border border-black p-2 font-medium">${item.title}</td>
-          <td class="border border-black p-2">${item.site || '-'}</td>
+          <td class="border border-black p-2 font-medium">${item.title || item.description || ''}</td>
+          <td class="border border-black p-2">${item.site || item.siteProject || '-'}</td>
           <td class="border border-black p-2 text-right font-mono">${incText}</td>
           <td class="border border-black p-2 text-right font-mono">${expText}</td>
           <td class="border border-black p-2 text-right font-mono font-bold">${runningBal.toFixed(2)}</td>
