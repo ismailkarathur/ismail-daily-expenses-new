@@ -171,9 +171,12 @@
 
       <!-- Filters & Clear Button -->
       <div class="flex flex-col lg:flex-row gap-2 items-start lg:items-center justify-between">
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 w-full">
-          <input type="text" id="filterKeyword" oninput="renderTable()" placeholder="Search..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-2 w-full">
+          <input type="text" id="filterKeyword" oninput="renderTable()" placeholder="Search Title/Desc..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
           
+          <!-- Site / Project Text Search Box -->
+          <input type="text" id="filterSiteKeyword" oninput="renderTable()" placeholder="Search Site (e.g. modar)..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
+
           <!-- Category Multi-Select Dropdown -->
           <div class="relative w-full">
             <button type="button" onclick="toggleCategoryFilter(event)" class="w-full bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white text-left flex justify-between items-center h-full">
@@ -593,18 +596,21 @@
       tbody.innerHTML = '';
       
       const keyword = document.getElementById('filterKeyword').value.toLowerCase();
+      const siteKeyword = (document.getElementById('filterSiteKeyword')?.value || '').toLowerCase().trim();
       const siteFilterVal = document.getElementById('filterSite').value;
       const fromDate = document.getElementById('filterFromDate').value;
       const toDate = document.getElementById('filterToDate').value;
 
       const filtered = allTx.filter(item => {
-        const matchesKw = (item.title || item.description || '').toLowerCase().includes(keyword) || (item.category || '').toLowerCase().includes(keyword) || (item.site || item.siteProject || '').toLowerCase().includes(keyword);
+        const matchesKw = (item.title || item.description || '').toLowerCase().includes(keyword) || (item.category || '').toLowerCase().includes(keyword);
+        const itemSite = (item.site || item.siteProject || '').toLowerCase();
+        const matchesSiteKw = !siteKeyword || itemSite.includes(siteKeyword);
         const matchesCat = selectedFilterCategories.length === 0 || selectedFilterCategories.includes(item.category);
-        const itemSite = item.site || item.siteProject || '';
-        const matchesSite = !siteFilterVal || itemSite === siteFilterVal;
+        const rawSite = item.site || item.siteProject || '';
+        const matchesSite = !siteFilterVal || rawSite === siteFilterVal;
         const matchesFrom = !fromDate || item.date >= fromDate;
         const matchesTo = !toDate || item.date <= toDate;
-        return matchesKw && matchesCat && matchesSite && matchesFrom && matchesTo;
+        return matchesKw && matchesSiteKw && matchesCat && matchesSite && matchesFrom && matchesTo;
       });
 
       filtered.forEach(item => {
@@ -751,7 +757,6 @@
       let remainingOffline = [];
       for (let item of offlineData) {
         try {
-          // If a Base64 image was saved offline, convert and upload it now
           if (item.fileUrl && item.fileUrl.startsWith('data:')) {
             const blob = await (await fetch(item.fileUrl)).blob();
             const storageRef = window.ref(window.storage, `receipts/offline_${Date.now()}`);
@@ -788,6 +793,7 @@
 
     function clearAllFilters() {
       document.getElementById('filterKeyword').value = '';
+      if(document.getElementById('filterSiteKeyword')) document.getElementById('filterSiteKeyword').value = '';
       document.querySelectorAll('.cat-filter-cb').forEach(cb => cb.checked = false);
       selectedFilterCategories = [];
       document.getElementById('categoryFilterLabel').innerText = 'All Categories';
@@ -802,16 +808,66 @@
       return allTx.filter(t => selectedIds.includes(t.id) || selectedIds.includes(String(t.createdAt)));
     }
 
+    // Helper to calculate actual running Available Balance for each transaction in chronological order
+    function getTransactionBalanceMap() {
+      const sortedAll = [...allTx].sort((a, b) => {
+        const dDiff = new Date(a.date || 0) - new Date(b.date || 0);
+        if (dDiff !== 0) return dDiff;
+        return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+      });
+
+      let runningAccountBal = 0;
+      const txBalMap = new Map();
+
+      sortedAll.forEach(t => {
+        const amt = parseFloat(Math.abs(t.amount) || 0);
+        const isInc = (t.type === 'Income' || parseFloat(t.amount) > 0);
+        if (isInc) {
+          runningAccountBal += amt;
+        } else {
+          runningAccountBal -= amt;
+        }
+        const key = t.id || String(t.createdAt);
+        txBalMap.set(key, runningAccountBal);
+      });
+
+      return txBalMap;
+    }
+
     async function shareSelectedJPEG() {
       const selected = getSelectedItems();
       if (selected.length === 0) return alert("Select at least one entry!");
-      selected.sort((a, b) => new Date(a.date) - new Date(b.date));
-      const tbody = document.getElementById('reportTableBody'); tbody.innerHTML = '';
-      let totalInc = 0, totalExp = 0, runningBal = 0;
+      
+      // Sort selected entries chronologically
+      selected.sort((a, b) => {
+        const dDiff = new Date(a.date || 0) - new Date(b.date || 0);
+        if (dDiff !== 0) return dDiff;
+        return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+      });
+
+      const txBalMap = getTransactionBalanceMap();
+      const tbody = document.getElementById('reportTableBody'); 
+      tbody.innerHTML = '';
+      
+      let totalInc = 0, totalExp = 0, lastAvailableBal = 0;
+
       selected.forEach(item => {
-        const amt = parseFloat(Math.abs(item.amount) || 0); let incText = '-', expText = '-';
-        if (item.type === 'Income' || parseFloat(item.amount) > 0) { incText = amt.toFixed(2); totalInc += amt; runningBal += amt; }
-        else { expText = amt.toFixed(2); totalExp += amt; runningBal -= amt; }
+        const amt = parseFloat(Math.abs(item.amount) || 0); 
+        let incText = '-', expText = '-';
+        const isInc = (item.type === 'Income' || parseFloat(item.amount) > 0);
+        
+        if (isInc) { 
+          incText = amt.toFixed(2); 
+          totalInc += amt; 
+        } else { 
+          expText = amt.toFixed(2); 
+          totalExp += amt; 
+        }
+
+        const key = item.id || String(item.createdAt);
+        const rowBal = txBalMap.get(key) ?? 0;
+        lastAvailableBal = rowBal;
+
         tbody.innerHTML += `
           <tr class="border-b border-black text-xs">
             <td class="border border-black p-2 text-center font-mono">${item.date}</td>
@@ -820,13 +876,14 @@
             <td class="border border-black p-2">${item.site || item.siteProject || '-'}</td>
             <td class="border border-black p-2 text-right font-mono">${incText}</td>
             <td class="border border-black p-2 text-right font-mono">${expText}</td>
-            <td class="border border-black p-2 text-right font-mono font-bold">${runningBal.toFixed(2)}</td>
+            <td class="border border-black p-2 text-right font-mono font-bold">${rowBal.toFixed(2)}</td>
           </tr>
         `;
       });
+
       document.getElementById('reportTotalIncome').innerText = totalInc.toFixed(2);
       document.getElementById('reportTotalExpense').innerText = totalExp.toFixed(2);
-      document.getElementById('reportFinalBalance').innerText = runningBal.toFixed(2);
+      document.getElementById('reportFinalBalance').innerText = lastAvailableBal.toFixed(2);
       document.getElementById('reportSubHeader').innerText = `${selected.length} ticked entries summary report`;
 
       const reportElem = document.getElementById('jpegReportContainer');
@@ -843,30 +900,38 @@
       }, 'image/jpeg', 0.95);
     }
 
-    // New PDF Export Logic using jsPDF & AutoTable
+    // PDF Export Logic using jsPDF & AutoTable
     function exportPDF() {
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
       if (selected.length === 0) return alert("No data available to export.");
 
-      const sorted = [...selected].sort((a,b) => new Date(a.date) - new Date(b.date));
+      const sorted = [...selected].sort((a,b) => {
+        const dDiff = new Date(a.date || 0) - new Date(b.date || 0);
+        if (dDiff !== 0) return dDiff;
+        return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+      });
+
+      const txBalMap = getTransactionBalanceMap();
       const tableRows = [];
-      let totalInc = 0, totalExp = 0, runningBal = 0;
+      let totalInc = 0, totalExp = 0, lastAvailableBal = 0;
 
       sorted.forEach(t => {
         const amt = parseFloat(Math.abs(t.amount) || 0);
         const isInc = (t.type === 'Income' || parseFloat(t.amount) > 0);
         let inc = isInc ? amt.toFixed(2) : '-';
         let exp = !isInc ? amt.toFixed(2) : '-';
-        runningBal += isInc ? amt : -amt;
         if(isInc) totalInc += amt; else totalExp += amt;
 
-        tableRows.push([ t.date, t.category, t.title || t.description || '', t.site || t.siteProject || '-', inc, exp, runningBal.toFixed(2) ]);
+        const key = t.id || String(t.createdAt);
+        const rowBal = txBalMap.get(key) ?? 0;
+        lastAvailableBal = rowBal;
+
+        tableRows.push([ t.date, t.category, t.title || t.description || '', t.site || t.siteProject || '-', inc, exp, rowBal.toFixed(2) ]);
       });
 
-      // Add Summary Row at the bottom
-      tableRows.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalInc.toFixed(2), styles: { fontStyle: 'bold' } }, { content: totalExp.toFixed(2), styles: { fontStyle: 'bold' } }, { content: runningBal.toFixed(2), styles: { fontStyle: 'bold' } } ]);
+      tableRows.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: totalInc.toFixed(2), styles: { fontStyle: 'bold' } }, { content: totalExp.toFixed(2), styles: { fontStyle: 'bold' } }, { content: lastAvailableBal.toFixed(2), styles: { fontStyle: 'bold' } } ]);
 
       doc.setFontSize(16);
       doc.text("Ismail Expense Manager - Report", 14, 15);
@@ -878,7 +943,7 @@
         body: tableRows,
         startY: 28,
         styles: { fontSize: 8 },
-        headStyles: { fillColor: [245, 158, 11] } // Amber Color to match app theme
+        headStyles: { fillColor: [245, 158, 11] }
       });
 
       doc.save(`Expense_Report_${new Date().toISOString().slice(0,10)}.pdf`);
@@ -891,8 +956,6 @@
       XLSX.utils.book_append_sheet(wb, ws, "Expenses");
       XLSX.writeFile(wb, `Ismail_Expenses.xlsx`);
     }
-
-    // JSON import/export functions retained from original code (removed for brevity but still fully functional in logic above if implemented identically)
   </script>
 </body>
 </html>
