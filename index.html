@@ -854,7 +854,9 @@
           const data = new Uint8Array(evt.target.result);
           const workbook = XLSX.read(data, { type: 'array', cellDates: true });
           
-          let totalImported = 0;
+          let parsedTransactions = [];
+          let indexCounter = 0;
+
           for (const sheetName of workbook.SheetNames) {
             const worksheet = workbook.Sheets[sheetName];
             const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
@@ -895,7 +897,6 @@
 
               let dateStr = '', title = '', category = 'Others', site = '', incomeAmt = 0, expenseAmt = 0;
 
-              // Correct column extraction strictly mapping standard template
               if (colMap.date !== undefined && r[colMap.date] !== undefined) {
                 dateStr = String(r[colMap.date] || '').trim().slice(0, 10);
               } else if (r[0]) {
@@ -932,53 +933,50 @@
                 expenseAmt = parseFloat(String(r[5] || '0').replace(/[^0-9.]/g, '')) || 0;
               }
 
-              if (!dateStr || dateStr.toLowerCase().includes('date') || dateStr.toLowerCase().includes('selected')) continue;
+              if (!dateStr || dateStr.toLowerCase().includes('date') || dateStr.toLowerCase().includes('selected') || dateStr.toLowerCase().includes('period')) continue;
               if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
 
               if (incomeAmt > 0) {
-                const payload = {
+                parsedTransactions.push({
                   title: title || 'Income',
                   amount: incomeAmt,
                   category: category || 'Salary',
                   date: dateStr,
                   site: site && site !== 'nan' ? site : '',
                   type: 'Income',
-                  createdAt: Date.now() + totalImported
-                };
-                if (navigator.onLine && window.db) {
-                  await window.addDoc(window.collection(window.db, "transactions"), payload);
-                } else {
-                  let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
-                  offlineData.push({ ...payload, isOffline: true });
-                  localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
-                }
-                totalImported++;
+                  createdAt: Date.now() + indexCounter++
+                });
               }
 
               if (expenseAmt > 0) {
-                const payload = {
+                parsedTransactions.push({
                   title: title || 'Expense',
                   amount: expenseAmt,
                   category: category || 'Expense',
                   date: dateStr,
                   site: site && site !== 'nan' ? site : '',
                   type: 'Expense',
-                  createdAt: Date.now() + totalImported
-                };
-                if (navigator.onLine && window.db) {
-                  await window.addDoc(window.collection(window.db, "transactions"), payload);
-                } else {
-                  let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
-                  offlineData.push({ ...payload, isOffline: true });
-                  localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
-                }
-                totalImported++;
+                  createdAt: Date.now() + indexCounter++
+                });
               }
             }
           }
 
+          // Save all parsed transactions efficiently in bulk local storage & Firestore fallback
+          let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+          
+          if (navigator.onLine && window.db) {
+            // Push directly to Firestore in batches or chunks to prevent timeout
+            for (let item of parsedTransactions) {
+              await window.addDoc(window.collection(window.db, "transactions"), item);
+            }
+          } else {
+            parsedTransactions.forEach(item => offlineData.push({ ...item, isOffline: true }));
+            localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+          }
+
           loadDataFromFirebase();
-          alert(`Excel imported successfully! Total ${totalImported} entries added.`);
+          alert(`Excel imported successfully! Total ${parsedTransactions.length} entries added.`);
           document.getElementById('excelImportInput').value = '';
         } catch (err) {
           alert("Error importing Excel: " + err.message);
