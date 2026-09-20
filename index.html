@@ -31,7 +31,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
-  <!-- Export Libraries -->
+  <!-- Export & Import Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
@@ -129,12 +129,16 @@
     <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-4 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2 border-b border-[#2a2a2a] pb-3">
         <h3 class="text-sm font-bold text-white">Transactions History</h3>
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
+          <label class="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-500/30 cursor-pointer flex items-center gap-1">
+            📥 Upload Excel
+            <input type="file" id="excelImportInput" onchange="importExcelFile(event)" accept=".xlsx, .xls" class="hidden">
+          </label>
           <button onclick="shareSelectedJPEG()" class="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-500/30 flex items-center gap-1">
             📷 Share JPEG
           </button>
           <button onclick="exportExcel()" class="bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-emerald-500/30">
-            📊 Excel
+            📊 Export Excel
           </button>
         </div>
       </div>
@@ -171,7 +175,7 @@
     </div>
   </div>
 
-  <!-- Hidden Printable/Capture View for JPEG Report (Matching Image 2 Table Format) -->
+  <!-- Printable/Capture View for JPEG Report -->
   <div class="hidden">
     <div id="jpegReportContainer" class="bg-white text-black p-6 w-[800px] font-sans">
       <div class="border-b-2 border-black pb-3 mb-4">
@@ -207,7 +211,7 @@
     </div>
   </div>
 
-  <!-- Transaction Modal -->
+  <!-- Transaction Modal (Add / Edit) -->
   <div id="txModal" class="fixed inset-0 bg-black/80 hidden flex items-center justify-center p-4 z-50">
     <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
       <h3 id="txModalTitle" class="text-lg font-bold text-white">Add Entry</h3>
@@ -238,15 +242,15 @@
             <label class="block text-xs font-medium text-gray-400 mb-1">Date</label>
             <input type="date" id="txDate" required class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
           </div>
-          <div>
+          <div id="txSiteContainer">
             <label class="block text-xs font-medium text-gray-400 mb-1">Site / Project</label>
             <input type="text" id="txSite" placeholder="e.g. Modar, Recharge" class="w-full p-2.5 bg-[#121212] border border-[#333] rounded-xl text-white text-sm outline-none">
           </div>
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1">Attachment / Receipt File</label>
-          <input type="file" id="txFile" accept="image/*,application/pdf" class="w-full text-xs text-gray-400">
+          <label class="block text-xs font-medium text-gray-400 mb-1">Attachment (Camera / Photos / PDF Docs)</label>
+          <input type="file" id="txFile" accept="image/*,.pdf,application/pdf" capture="environment" class="w-full text-xs text-gray-400 border border-[#333] p-2 rounded-xl bg-[#121212]">
         </div>
 
         <div class="flex justify-end gap-2 pt-3">
@@ -295,7 +299,6 @@
     let customCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others'];
     let chartInstance = null;
 
-    // Load saved categories from localStorage
     const savedCats = localStorage.getItem('ismail_custom_cats');
     if (savedCats) {
       try { customCategories = JSON.parse(savedCats); } catch(e){}
@@ -431,6 +434,7 @@
           </td>
           <td class="p-2 text-right space-x-2">
             ${item.fileUrl ? `<a href="${item.fileUrl}" target="_blank" class="text-amber-400 underline text-[10px]">File</a>` : ''}
+            <button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>
             <button onclick="deleteTx('${item.id}')" class="text-red-400 hover:underline text-[10px]">Delete</button>
           </td>
         `;
@@ -482,7 +486,41 @@
       document.getElementById('txForm').reset();
       document.getElementById('txType').value = type;
       document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
-      document.getElementById('txModalTitle').innerText = type === 'Income' ? 'Add Income' : 'Add Expense';
+      
+      const siteContainer = document.getElementById('txSiteContainer');
+      if (type === 'Income') {
+        document.getElementById('txModalTitle').innerText = 'Add Income';
+        siteContainer.style.display = 'none';
+      } else {
+        document.getElementById('txModalTitle').innerText = 'Add Expense';
+        siteContainer.style.display = 'block';
+      }
+
+      document.getElementById('txModal').classList.remove('hidden');
+    }
+
+    function editTx(id) {
+      const item = allTx.find(x => x.id === id);
+      if (!item) return;
+
+      document.getElementById('editDocId').value = item.id;
+      document.getElementById('txTitle').value = item.title || '';
+      document.getElementById('txAmount').value = item.amount || '';
+      document.getElementById('txCategory').value = item.category || customCategories[0];
+      document.getElementById('txDate').value = item.date || new Date().toISOString().split('T')[0];
+      document.getElementById('txType').value = item.type || 'Expense';
+
+      const siteContainer = document.getElementById('txSiteContainer');
+      if (item.type === 'Income') {
+        document.getElementById('txModalTitle').innerText = 'Edit Income';
+        siteContainer.style.display = 'none';
+        document.getElementById('txSite').value = '';
+      } else {
+        document.getElementById('txModalTitle').innerText = 'Edit Expense';
+        siteContainer.style.display = 'block';
+        document.getElementById('txSite').value = item.site || '';
+      }
+
       document.getElementById('txModal').classList.remove('hidden');
     }
 
@@ -490,12 +528,13 @@
 
     async function saveTransaction(e) {
       e.preventDefault();
+      const id = document.getElementById('editDocId').value;
       const title = document.getElementById('txTitle').value;
       const amount = parseFloat(document.getElementById('txAmount').value);
       const category = document.getElementById('txCategory').value;
       const date = document.getElementById('txDate').value;
-      const site = document.getElementById('txSite').value;
       const type = document.getElementById('txType').value;
+      const site = type === 'Expense' ? document.getElementById('txSite').value : '';
       const fileInput = document.getElementById('txFile');
 
       let fileUrl = '';
@@ -509,12 +548,17 @@
       const data = { title, amount, category, date, site, type, uid: currentUser.uid, updatedAt: new Date() };
       if (fileUrl) data.fileUrl = fileUrl;
 
-      await db.collection('expenses').add(data);
+      if (id) {
+        await db.collection('expenses').doc(id).update(data);
+      } else {
+        await db.collection('expenses').add(data);
+      }
+
       closeTransactionModal();
     }
 
     async function deleteTx(id) {
-      if (confirm("Delete this entry?")) {
+      if (confirm("Are you sure you want to delete this transaction?")) {
         await db.collection('expenses').doc(id).delete();
       }
     }
@@ -528,12 +572,64 @@
       return allTx.filter(t => selectedIds.includes(t.id));
     }
 
-    // --- SHARE AS JPEG (Formatted like Image 2) ---
+    // --- UPLOAD / IMPORT EXCEL FILE ---
+    function importExcelFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        try {
+          const data = new Uint8Array(evt.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const jsonRows = XLSX.utils.sheet_to_json(worksheet);
+
+          if (jsonRows.length === 0) return alert("Excel file is empty!");
+
+          let count = 0;
+          for (const row of jsonRows) {
+            const title = row.title || row.Title || row.Description || row.description || 'Excel Import';
+            const amount = parseFloat(row.amount || row.Amount || row.Expense || row.Income || 0);
+            const category = row.category || row.Category || 'Others';
+            let date = row.date || row.Date || new Date().toISOString().slice(0, 10);
+            if (typeof date === 'number') {
+              date = new Date((date - (25567 + 2)) * 86400 * 1000).toISOString().slice(0, 10);
+            }
+            const site = row.site || row.Site || row['Site / Project'] || row['Site/Project'] || '';
+            const type = row.type || row.Type || (row.Income ? 'Income' : 'Expense');
+
+            const newEntry = {
+              title: String(title),
+              amount: amount,
+              category: String(category),
+              date: String(date),
+              site: String(site),
+              type: String(type),
+              uid: currentUser.uid,
+              updatedAt: new Date()
+            };
+
+            await db.collection('expenses').add(newEntry);
+            count++;
+          }
+
+          alert(`Successfully uploaded ${count} entries from Excel!`);
+          document.getElementById('excelImportInput').value = '';
+        } catch (err) {
+          console.error("Excel import error:", err);
+          alert("Error importing Excel file. Please check file format.");
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    // --- SHARE AS JPEG ---
     async function shareSelectedJPEG() {
       const selected = getSelectedItems();
       if (selected.length === 0) return alert("Select at least one entry using checkboxes!");
 
-      // Sort chronological
       selected.sort((a, b) => new Date(a.date) - new Date(b.date));
 
       const tbody = document.getElementById('reportTableBody');
@@ -577,7 +673,6 @@
       document.getElementById('reportFinalBalance').innerText = runningBal.toFixed(2);
       document.getElementById('reportSubHeader').innerText = `${selected.length} ticked entries summary report`;
 
-      // Render to Image
       const reportElem = document.getElementById('jpegReportContainer');
       reportElem.parentElement.classList.remove('hidden');
 
@@ -599,7 +694,6 @@
             console.log("Share canceled/failed:", err);
           }
         } else {
-          // Fallback download image & open WhatsApp share link
           const link = document.createElement('a');
           link.href = URL.createObjectURL(blob);
           link.download = fileName;
