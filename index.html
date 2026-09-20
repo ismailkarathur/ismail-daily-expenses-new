@@ -53,6 +53,20 @@
     </div>
   </div>
 
+  <!-- Excel Upload Progress Modal (0% to 100%) -->
+  <div id="uploadProgressModal" class="fixed inset-0 bg-black/85 hidden flex items-center justify-center p-4 z-50">
+    <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-xs w-full p-6 text-center space-y-4 shadow-2xl">
+      <div class="space-y-1">
+        <h3 class="text-base font-bold text-white">Uploading Excel Data</h3>
+        <p id="uploadStatusDetail" class="text-xs text-gray-400">Reading Excel file...</p>
+      </div>
+      <div class="w-full bg-[#121212] rounded-full h-3 border border-[#333] overflow-hidden">
+        <div id="uploadProgressBar" class="bg-amber-500 h-full w-0 transition-all duration-150"></div>
+      </div>
+      <div id="uploadProgressText" class="text-lg font-black text-amber-400">0%</div>
+    </div>
+  </div>
+
   <!-- Main Dashboard -->
   <div id="appContainer" class="max-w-2xl mx-auto px-4 py-6 space-y-6 hidden">
     
@@ -475,7 +489,7 @@
           allTx = [...offlineData, ...allTx];
         }
 
-        // Sort by Date descending (Newest date first), then by createdAt
+        // Sort by Date descending (Newest date first)
         allTx.sort((a, b) => {
           const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
           if (dateDiff !== 0) return dateDiff;
@@ -486,7 +500,6 @@
         renderTable();
         renderChart();
       } catch (err) {
-        console.log("Using local offline storage data fallback");
         let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
         allTx = offlineData;
         allTx.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
@@ -517,20 +530,28 @@
       }
     }
 
+    // --- FIX 1: AVAILABLE BALANCE CALCULATION ---
     function updateSummary() {
       let income = 0;
-      let expense = 0;
+      let expense = 0; // Magnitude of expenses
       let catCounts = {};
+
       allTx.forEach(t => {
         const amt = parseFloat(t.amount || 0);
-        if (t.type === 'Income') {
-          income += amt;
+        const isIncome = t.type === 'Income' || amt > 0;
+
+        if (isIncome) {
+          income += Math.abs(amt);
         } else {
-          expense += amt;
-          catCounts[t.category] = (catCounts[t.category] || 0) + amt;
+          expense += Math.abs(amt);
+          const cat = t.category || 'Others';
+          catCounts[cat] = (catCounts[cat] || 0) + Math.abs(amt);
         }
       });
+
+      // Available Balance = Income - Expense (Correct mathematical subtraction)
       const balance = income - expense;
+
       document.getElementById('availableBalanceText').innerText = `₹${balance.toFixed(2)}`;
       document.getElementById('totalIncomeText').innerText = `₹${income.toFixed(2)}`;
       document.getElementById('totalExpenseText').innerText = `₹${expense.toFixed(2)}`;
@@ -561,9 +582,11 @@
       });
 
       filtered.forEach(item => {
-        const isInc = item.type === 'Income';
+        const isInc = item.type === 'Income' || parseFloat(item.amount) > 0;
+        const absAmt = Math.abs(parseFloat(item.amount) || 0);
         const displayTitle = item.title || item.description || '';
         const displaySite = item.site || item.siteProject || '-';
+
         const tr = document.createElement('tr');
         tr.className = "hover:bg-[#1a1a1a]";
         tr.innerHTML = `
@@ -576,7 +599,7 @@
           </td>
           <td class="p-2 text-gray-400">${displaySite}</td>
           <td class="p-2 font-bold ${isInc ? 'text-green-400' : 'text-amber-500'}">
-            ${isInc ? '+' : '-'}₹${parseFloat(Math.abs(item.amount)).toFixed(2)}
+            ${isInc ? '+' : '-'}₹${absAmt.toFixed(2)}
           </td>
           <td class="p-2 text-right space-x-2">
             ${item.id ? `<button onclick="editTx('${item.id}')" class="text-blue-400 hover:underline text-[10px]">Edit</button>` : '<span class="text-gray-500 text-[10px]">Pending Sync</span>'}
@@ -592,11 +615,11 @@
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
       const dataVals = [0, 0, 0, 0, 0, 0, 0];
       allTx.forEach(t => {
-        if (t.date && t.type !== 'Income') {
+        if (t.date && t.type !== 'Income' && parseFloat(t.amount) < 0) {
           const d = new Date(t.date);
           let dayIdx = d.getDay() - 1;
           if (dayIdx === -1) dayIdx = 6;
-          dataVals[dayIdx] += parseFloat(Math.abs(t.amount) || 0);
+          dataVals[dayIdx] += Math.abs(parseFloat(t.amount) || 0);
         }
       });
       chartInstance = new Chart(ctx, {
@@ -643,7 +666,7 @@
       document.getElementById('txAmount').value = Math.abs(item.amount || 0);
       document.getElementById('txCategory').value = item.category || customCategories[0];
       document.getElementById('txDate').value = item.date || new Date().toISOString().split('T')[0];
-      document.getElementById('txType').value = item.type || 'Expense';
+      document.getElementById('txType').value = item.type || (parseFloat(item.amount) >= 0 ? 'Income' : 'Expense');
       document.getElementById('deleteTxModalBtn').classList.remove('hidden');
       
       const fileContainer = document.getElementById('existingFileLink');
@@ -701,7 +724,7 @@
             const storageRef = window.ref(window.storage, `receipts/${Date.now()}_${file.name}`);
             const snapshot = await window.uploadBytes(storageRef, file);
             fileUrl = await window.getDownloadURL(snapshot.ref);
-          } catch(err) { console.log("File upload skipped due to network"); }
+          } catch(err) { console.log("File upload skipped"); }
         }
 
         const dataPayload = { 
@@ -725,7 +748,7 @@
 
           closeTransactionModal();
           loadDataFromFirebase();
-          alert("ഇന്റർനെറ്റ് കണക്ഷൻ ഇല്ല! ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തിട്ടുണ്ട്.");
+          alert("Saved offline!");
           return;
         }
 
@@ -745,7 +768,6 @@
           localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
           closeTransactionModal();
           loadDataFromFirebase();
-          alert("നെറ്റ്വർക്ക് പ്രശ്നം കാരണം ഡാറ്റ ലോക്കലായി സേവ് ചെയ്തു.");
         } else {
           alert("Error saving: " + err.message);
         }
@@ -781,9 +803,6 @@
         try {
           if (navigator.onLine) {
             await window.deleteDoc(window.doc(window.db, "transactions", id));
-          } else {
-            alert("ഇന്റർനെറ്റ് ഇല്ലാത്ത സമയത്ത് ഡിലീറ്റ് ചെയ്യാൻ സാധിക്കില്ല.");
-            return;
           }
           closeTransactionModal();
           loadDataFromFirebase();
@@ -802,7 +821,6 @@
       return allTx.filter(t => selectedIds.includes(t.id) || selectedIds.includes(String(t.createdAt)));
     }
 
-    // --- JSON IMPORT & EXPORT FUNCTIONS ---
     function exportJsonFile() {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(allTx, null, 2));
       const downloadAnchor = document.createElement('a');
@@ -820,9 +838,7 @@
       reader.onload = async (evt) => {
         try {
           const importedData = JSON.parse(evt.target.result);
-          if (!Array.isArray(importedData)) {
-            throw new Error("Invalid JSON format.");
-          }
+          if (!Array.isArray(importedData)) throw new Error("Invalid JSON format.");
 
           let addedCount = 0;
           for (const item of importedData) {
@@ -858,11 +874,22 @@
       };
       reader.readAsText(file);
     }
-    // ---------------------------------------
 
+    // --- FIX 2 & 3: EXCEL IMPORT WITH 0-100% PROGRESS BAR & ACCURATE COLUMN MAPPING ---
     async function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
+
+      const progressModal = document.getElementById('uploadProgressModal');
+      const progressBar = document.getElementById('uploadProgressBar');
+      const progressText = document.getElementById('uploadProgressText');
+      const progressDetail = document.getElementById('uploadStatusDetail');
+
+      progressModal.classList.remove('hidden');
+      progressBar.style.width = '0%';
+      progressText.innerText = '0%';
+      progressDetail.innerText = 'Reading Excel file...';
+
       const reader = new FileReader();
       reader.onload = async (evt) => {
         try {
@@ -879,14 +906,15 @@
             let headerIdx = -1;
             let colMap = {};
 
-            for (let i = 0; i < rows.length; i++) {
+            // Search header row
+            for (let i = 0; i < Math.min(rows.length, 10); i++) {
               const r = rows[i];
               if (!r) continue;
-              const rowStr = r.map(c => String(c).toLowerCase());
+              const rowStr = r.map(c => String(c).toLowerCase().trim());
               if (rowStr.some(s => s.includes('date') || s.includes('income') || s.includes('expense') || s.includes('description'))) {
                 headerIdx = i;
                 r.forEach((colName, idx) => {
-                  const name = String(colName).toLowerCase();
+                  const name = String(colName).toLowerCase().trim();
                   if (name.includes('date')) colMap.date = idx;
                   else if (name.includes('description') || name.includes('title')) colMap.title = idx;
                   else if (name.includes('category')) colMap.category = idx;
@@ -898,64 +926,53 @@
               }
             }
 
-            if (headerIdx === -1 && rows.length > 4) {
-              headerIdx = 4;
+            // Fallback for user's excel format
+            if (headerIdx === -1 && rows.length > 3) {
+              headerIdx = 3;
               colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5 };
             }
 
             const startRow = headerIdx !== -1 ? headerIdx + 1 : 0;
+            const totalRows = rows.length - startRow;
+
             for (let i = startRow; i < rows.length; i++) {
               const r = rows[i];
+              
+              // Progress 0% -> 50% during parsing
+              const parsePercent = Math.min(50, Math.round(((i - startRow + 1) / (totalRows || 1)) * 50));
+              progressBar.style.width = `${parsePercent}%`;
+              progressText.innerText = `${parsePercent}%`;
+              progressDetail.innerText = `Parsing row ${i - startRow + 1} of ${totalRows}...`;
+
               if (!r || r.length === 0) continue;
 
-              let dateStr = '', title = '', category = 'Others', site = '', incomeAmt = 0, expenseAmt = 0;
+              let rawDate = (colMap.date !== undefined && r[colMap.date] !== undefined) ? r[colMap.date] : r[0];
+              let rawTitle = (colMap.title !== undefined && r[colMap.title] !== undefined) ? r[colMap.title] : r[1];
+              let rawCat = (colMap.category !== undefined && r[colMap.category] !== undefined) ? r[colMap.category] : r[2];
+              let rawSite = (colMap.site !== undefined && r[colMap.site] !== undefined) ? r[colMap.site] : r[3];
+              let rawIncome = (colMap.income !== undefined && r[colMap.income] !== undefined) ? r[colMap.income] : r[4];
+              let rawExpense = (colMap.expense !== undefined && r[colMap.expense] !== undefined) ? r[colMap.expense] : r[5];
 
-              if (colMap.date !== undefined && r[colMap.date] !== undefined) {
-                dateStr = String(r[colMap.date] || '').trim().slice(0, 10);
-              } else if (r[0]) {
-                dateStr = String(r[0]).trim().slice(0, 10);
-              }
+              let dateStr = String(rawDate || '').trim();
+              let title = String(rawTitle || '').trim();
+              let category = String(rawCat || '').trim();
+              let site = String(rawSite || '').trim();
 
-              if (colMap.title !== undefined && r[colMap.title] !== undefined) {
-                title = String(r[colMap.title] || '').trim();
-              } else if (r[1]) {
-                title = String(r[1]).trim();
-              }
+              // Safe numeric parsing for Income & Expense
+              let incomeAmt = parseFloat(String(rawIncome || '0').replace(/[^0-9.]/g, '')) || 0;
+              let expenseAmt = parseFloat(String(rawExpense || '0').replace(/[^0-9.]/g, '')) || 0;
 
-              if (colMap.category !== undefined && r[colMap.category] !== undefined) {
-                category = String(r[colMap.category] || '').trim();
-              } else if (r[2]) {
-                category = String(r[2]).trim();
-              }
-
-              if (colMap.site !== undefined && r[colMap.site] !== undefined) {
-                site = String(r[colMap.site] || '').trim();
-              } else if (r[3]) {
-                site = String(r[3]).trim();
-              }
-
-              // Explicitly reading correct income/expense columns (col 4 and col 5)
-              if (colMap.income !== undefined && r[colMap.income] !== undefined) {
-                incomeAmt = parseFloat(String(r[colMap.income] || '0').replace(/[^0-9.]/g, '')) || 0;
-              } else if (r[4]) {
-                incomeAmt = parseFloat(String(r[4] || '0').replace(/[^0-9.]/g, '')) || 0;
-              }
-
-              if (colMap.expense !== undefined && r[colMap.expense] !== undefined) {
-                expenseAmt = parseFloat(String(r[colMap.expense] || '0').replace(/[^0-9.]/g, '')) || 0;
-              } else if (r[5]) {
-                expenseAmt = parseFloat(String(r[5] || '0').replace(/[^0-9.]/g, '')) || 0;
-              }
-
-              if (!dateStr || dateStr.toLowerCase().includes('date') || dateStr.toLowerCase().includes('selected') || dateStr.toLowerCase().includes('period')) continue;
+              if (!dateStr || dateStr.toLowerCase().includes('date') || dateStr.toLowerCase().includes('selected') || dateStr.toLowerCase().includes('account')) continue;
+              
               if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+              if (dateStr.length > 10) dateStr = dateStr.slice(0, 10);
 
               if (incomeAmt > 0) {
                 parsedTransactions.push({
                   title: title || 'Income',
                   description: title || 'Income',
                   amount: incomeAmt,
-                  category: category || 'Salary',
+                  category: category && category !== 'nan' ? category : 'Salary',
                   date: dateStr,
                   site: site && site !== 'nan' ? site : '',
                   siteProject: site && site !== 'nan' ? site : '',
@@ -969,7 +986,7 @@
                   title: title || 'Expense',
                   description: title || 'Expense',
                   amount: -expenseAmt,
-                  category: category || 'Expense',
+                  category: category && category !== 'nan' ? category : 'Expense',
                   date: dateStr,
                   site: site && site !== 'nan' ? site : '',
                   siteProject: site && site !== 'nan' ? site : '',
@@ -980,21 +997,37 @@
             }
           }
 
-          let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
-          
+          // Progress 50% -> 100% during database saving
+          progressDetail.innerText = "Saving to database...";
+          let totalToSave = parsedTransactions.length;
+          let savedCount = 0;
+
           if (navigator.onLine && window.db) {
             for (let item of parsedTransactions) {
               await window.addDoc(window.collection(window.db, "transactions"), item);
+              savedCount++;
+              let savePercent = 50 + Math.round((savedCount / (totalToSave || 1)) * 50);
+              progressBar.style.width = `${savePercent}%`;
+              progressText.innerText = `${savePercent}%`;
+              progressDetail.innerText = `Uploaded ${savedCount} of ${totalToSave} entries...`;
             }
           } else {
+            let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
             parsedTransactions.forEach(item => offlineData.push({ ...item, isOffline: true }));
             localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+            progressBar.style.width = '100%';
+            progressText.innerText = '100%';
           }
 
-          loadDataFromFirebase();
-          alert(`Excel imported successfully! Total ${parsedTransactions.length} entries added.`);
-          document.getElementById('excelImportInput').value = '';
+          setTimeout(() => {
+            progressModal.classList.add('hidden');
+            loadDataFromFirebase();
+            alert(`Excel imported successfully! ${parsedTransactions.length} entries added.`);
+            document.getElementById('excelImportInput').value = '';
+          }, 300);
+
         } catch (err) {
+          progressModal.classList.add('hidden');
           alert("Error importing Excel: " + err.message);
         }
       };
@@ -1011,7 +1044,7 @@
       selected.forEach(item => {
         const amt = parseFloat(Math.abs(item.amount) || 0);
         let incText = '-', expText = '-';
-        if (item.type === 'Income') { incText = amt.toFixed(2); totalInc += amt; runningBal += amt; }
+        if (item.type === 'Income' || parseFloat(item.amount) > 0) { incText = amt.toFixed(2); totalInc += amt; runningBal += amt; }
         else { expText = amt.toFixed(2); totalExp += amt; runningBal -= amt; }
         const tr = document.createElement('tr');
         tr.className = "border-b border-black text-xs";
@@ -1042,7 +1075,6 @@
           try { await navigator.share({ files: [file], title: 'Report', text: 'Expense report.' }); } catch (err) {}
         } else {
           const link = document.createElement('a');
-          link.export = URL.createObjectURL(blob);
           link.href = URL.createObjectURL(blob);
           link.download = `Expense_Report.jpg`;
           link.click();
