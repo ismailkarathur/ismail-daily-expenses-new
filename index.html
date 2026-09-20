@@ -311,7 +311,7 @@
         document.getElementById('authContainer').classList.add('hidden');
         document.getElementById('appContainer').classList.remove('hidden');
         populateCategoryDropdowns();
-        fetchDataOnce();
+        listenToData();
       } else {
         document.getElementById('authContainer').classList.remove('hidden');
         document.getElementById('appContainer').classList.add('hidden');
@@ -359,28 +359,27 @@
       }
     }
 
-    async function fetchDataOnce() {
-      if (!currentUser) return;
-      try {
-        const snapshot = await db.collection('expenses').where('uid', '==', currentUser.uid).get();
-        allTx = [];
-        snapshot.forEach(doc => {
-          allTx.push({ id: doc.id, ...doc.data() });
-        });
-        allTx.sort((a, b) => {
-          const dateA = new Date(a.date || 0);
-          const dateB = new Date(b.date || 0);
-          if (dateB - dateA !== 0) return dateB - dateA;
-          const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
-          const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
-          return timeB - timeA;
-        });
-        updateSummary();
-        renderTable();
-        renderChart();
-      } catch (err) {
-        console.error("Fetch error:", err);
-      }
+    function listenToData() {
+      db.collection('expenses')
+        .where('uid', '==', currentUser.uid)
+        .onSnapshot(snapshot => {
+          allTx = [];
+          snapshot.forEach(doc => {
+            allTx.push({ id: doc.id, ...doc.data() });
+          });
+          // Sort newest first
+          allTx.sort((a, b) => {
+            const dateA = new Date(a.date || 0);
+            const dateB = new Date(b.date || 0);
+            if (dateB - dateA !== 0) return dateB - dateA;
+            const timeA = a.updatedAt?.toMillis ? a.updatedAt.toMillis() : 0;
+            const timeB = b.updatedAt?.toMillis ? b.updatedAt.toMillis() : 0;
+            return timeB - timeA;
+          });
+          updateSummary();
+          renderTable();
+          renderChart();
+        }, err => console.error("Snapshot error:", err));
     }
 
     function updateSummary() {
@@ -625,7 +624,7 @@
         }
 
         closeTransactionModal();
-        location.reload(); // Guaranteed instant cleanup and refresh
+        location.reload(); // Hard refresh guarantees clean screen and instant update
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving transaction: " + err.message);
@@ -642,7 +641,7 @@
         try {
           await db.collection('expenses').doc(id).delete();
           closeTransactionModal();
-          location.reload(); // Guaranteed instant cleanup and refresh
+          location.reload(); // Hard refresh guarantees clean screen and instant update
         } catch (err) {
           alert("Error deleting entry: " + err.message);
         }
