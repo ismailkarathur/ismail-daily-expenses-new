@@ -625,7 +625,7 @@
         }
 
         closeTransactionModal();
-        await fetchDataOnce();
+        location.reload(); // Guaranteed instant cleanup and refresh
       } catch (err) {
         console.error("Save error:", err);
         alert("Error saving transaction: " + err.message);
@@ -642,7 +642,7 @@
         try {
           await db.collection('expenses').doc(id).delete();
           closeTransactionModal();
-          await fetchDataOnce();
+          location.reload(); // Guaranteed instant cleanup and refresh
         } catch (err) {
           alert("Error deleting entry: " + err.message);
         }
@@ -779,7 +779,7 @@
 
           alert(`Successfully uploaded all ${count} historical entries from Excel!`);
           document.getElementById('excelImportInput').value = '';
-          await fetchDataOnce();
+          location.reload();
         } catch (err) {
           console.error("Excel import error:", err);
           alert("Error importing Excel file. Please try again.");
