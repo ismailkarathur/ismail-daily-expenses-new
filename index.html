@@ -859,7 +859,7 @@
               const r = rows[i];
               if (!r) continue;
               const rowStr = r.map(c => String(c).toLowerCase());
-              if (rowStr.some(s => s.includes('date') || s.includes('description') || s.includes('income') || s.includes('expense'))) {
+              if (rowStr.some(s => s.includes('date') || s.includes('income') || s.includes('expense'))) {
                 headerIdx = i;
                 r.forEach((colName, idx) => {
                   const name = String(colName).toLowerCase();
@@ -882,41 +882,50 @@
               let dateStr = '', title = '', category = 'Others', site = '', incomeAmt = 0, expenseAmt = 0;
 
               if (Object.keys(colMap).length > 0) {
-                dateStr = String(r[colMap.date] || new Date().toISOString().slice(0,10)).slice(0,10);
-                title = String(r[colMap.title] || 'Excel Import');
-                category = String(r[colMap.category] || 'Others');
-                site = String(r[colMap.site] || '');
+                dateStr = String(r[colMap.date] || '').trim().slice(0, 10);
+                title = String(r[colMap.title] || 'Excel Import').trim();
+                category = String(r[colMap.category] || 'Others').trim();
+                site = String(r[colMap.site] || '').trim();
                 incomeAmt = parseFloat(String(r[colMap.income] || '0').replace(/[^0-9.]/g, '')) || 0;
                 expenseAmt = parseFloat(String(r[colMap.expense] || '0').replace(/[^0-9.]/g, '')) || 0;
-              } else {
-                dateStr = String(r[0] || new Date().toISOString().slice(0,10)).slice(0,10);
-                title = String(r[1] || 'Excel Import');
-                category = String(r[2] || 'Others');
-                site = String(r[3] || '');
-                incomeAmt = parseFloat(String(r[4] || '0').replace(/[^0-9.]/g, '')) || 0;
-                expenseAmt = parseFloat(String(r[5] || r[4] || '0').replace(/[^0-9.]/g, '')) || 0;
               }
 
+              if (!dateStr || dateStr.toLowerCase().includes('date')) continue;
               if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
 
-              const payload = { title, category, date: dateStr, site: '', type: 'Income', createdAt: Date.now() + totalImported };
               if (incomeAmt > 0) {
-                payload.amount = incomeAmt;
-                payload.type = 'Income';
-                if (navigator.onLine) await window.addDoc(window.collection(window.db, "transactions"), payload);
-                else {
+                const payload = {
+                  title: title,
+                  amount: incomeAmt,
+                  category: category || 'Salary',
+                  date: dateStr,
+                  site: site && site !== 'nan' ? site : '',
+                  type: 'Income',
+                  createdAt: Date.now() + totalImported
+                };
+                if (navigator.onLine && window.db) {
+                  await window.addDoc(window.collection(window.db, "transactions"), payload);
+                } else {
                   let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
                   offlineData.push({ ...payload, isOffline: true });
                   localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
                 }
                 totalImported++;
               }
+
               if (expenseAmt > 0) {
-                payload.amount = expenseAmt;
-                payload.type = 'Expense';
-                payload.site = site;
-                if (navigator.onLine) await window.addDoc(window.collection(window.db, "transactions"), payload);
-                else {
+                const payload = {
+                  title: title,
+                  amount: expenseAmt,
+                  category: category || 'Expense',
+                  date: dateStr,
+                  site: site && site !== 'nan' ? site : '',
+                  type: 'Expense',
+                  createdAt: Date.now() + totalImported
+                };
+                if (navigator.onLine && window.db) {
+                  await window.addDoc(window.collection(window.db, "transactions"), payload);
+                } else {
                   let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
                   offlineData.push({ ...payload, isOffline: true });
                   localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
@@ -986,7 +995,7 @@
     }
 
     function exportExcel() {
-      const selected = getSelectedItems().length > 0 ? getSelectedItems() - allTx : allTx;
+      const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
       const ws = XLSX.utils.json_to_sheet(selected);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Expenses");
