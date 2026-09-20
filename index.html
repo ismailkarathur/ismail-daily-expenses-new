@@ -475,7 +475,13 @@
           allTx = [...offlineData, ...allTx];
         }
 
-        allTx.sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+        // Sort by Date descending (Newest date first), then by createdAt
+        allTx.sort((a, b) => {
+          const dateDiff = new Date(b.date || 0) - new Date(a.date || 0);
+          if (dateDiff !== 0) return dateDiff;
+          return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+        });
+
         updateSummary();
         renderTable();
         renderChart();
@@ -483,6 +489,7 @@
         console.log("Using local offline storage data fallback");
         let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
         allTx = offlineData;
+        allTx.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
         updateSummary();
         renderTable();
         renderChart();
@@ -877,7 +884,7 @@
 
             // Fallback if explicit header names weren't found perfectly
             if (headerIdx === -1 && rows.length > 4) {
-              headerIdx = 4; // Default based on standard template row 4
+              headerIdx = 4;
               colMap = { date: 0, title: 1, category: 2, site: 3, income: 4, expense: 5 };
             }
 
@@ -888,6 +895,7 @@
 
               let dateStr = '', title = '', category = 'Others', site = '', incomeAmt = 0, expenseAmt = 0;
 
+              // Correct column extraction strictly mapping standard template
               if (colMap.date !== undefined && r[colMap.date] !== undefined) {
                 dateStr = String(r[colMap.date] || '').trim().slice(0, 10);
               } else if (r[0]) {
@@ -1015,7 +1023,7 @@
       reportElem.parentElement.classList.add('hidden');
 
       canvas.toBlob(async (blob) => {
-        const file = new File([blob], `Expense_Report.jpg`, { type: 'image/jpeg' });
+        const file = new File([blob], `Expense_Report.jpg`, { type: 'image/jpeg'});
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           try { await navigator.share({ files: [file], title: 'Report', text: 'Expense report.' }); } catch (err) {}
         } else {
