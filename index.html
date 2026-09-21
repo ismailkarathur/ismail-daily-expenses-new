@@ -55,7 +55,7 @@
     </div>
   </div>
 
-  <!-- Excel Upload Progress Modal -->
+  <!-- Excel/JSON Upload Progress Modal -->
   <div id="uploadProgressModal" class="fixed inset-0 bg-black/85 hidden flex items-center justify-center p-4 z-50">
     <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl max-w-xs w-full p-6 text-center space-y-4 shadow-2xl">
       <div class="space-y-1">
@@ -146,9 +146,9 @@
       </div>
     </div>
 
-    <!-- Simple Weekly Cashflow Chart -->
+    <!-- Rolling 7-Day Cashflow Chart -->
     <div class="bg-[#1e1e1e] border border-[#2a2a2a] rounded-2xl p-4 space-y-2">
-      <h3 class="text-xs font-bold text-white uppercase tracking-wider">Weekly cash flow</h3>
+      <h3 class="text-xs font-bold text-white uppercase tracking-wider">Weekly cash flow (Last 7 Days)</h3>
       <div class="h-32 w-full">
         <canvas id="cashflowChart"></canvas>
       </div>
@@ -160,7 +160,7 @@
         <h3 class="text-sm font-bold text-white">Transactions History</h3>
         <div class="flex flex-wrap gap-2">
           <label class="bg-blue-500/20 border border-blue-500/40 text-blue-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-blue-500/30 cursor-pointer flex items-center gap-1">
-            📥 Excel
+            📥 Import Excel
             <input type="file" id="excelImportInput" onchange="importExcelFile(event)" accept=".xlsx, .xls, .csv" class="hidden">
           </label>
           <button onclick="shareSelectedJPEG()" class="bg-amber-500/20 border border-amber-500/40 text-amber-400 px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-amber-500/30 flex items-center gap-1">
@@ -182,8 +182,6 @@
       <div class="flex flex-col lg:flex-row gap-2 items-start lg:items-center justify-between">
         <div class="grid grid-cols-2 md:grid-cols-6 gap-2 w-full">
           <input type="text" id="filterKeyword" oninput="renderTable()" placeholder="Search Title/Desc..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
-          
-          <!-- Site / Project Text Search Box -->
           <input type="text" id="filterSiteKeyword" oninput="renderTable()" placeholder="Search Site (e.g. modar)..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
 
           <!-- Category Multi-Select Dropdown -->
@@ -322,7 +320,7 @@
         </div>
 
         <div>
-          <label class="block text-xs font-medium text-gray-400 mb-1">Attach Bill / Photo</label>
+          <label class="block text-xs font-medium text-gray-400 mb-1">Attach Bill / Photo (Fast compressed)</label>
           <input type="file" id="txFile" accept="image/*,application/pdf" class="w-full p-2 bg-[#121212] border border-[#333] rounded-xl text-xs text-gray-300 file:mr-4 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-black hover:file:bg-amber-400">
           <div id="existingFileLink" class="mt-1 text-xs"></div>
         </div>
@@ -417,19 +415,23 @@
       await syncOfflineTransactions();
     });
 
-    // Compress image to make attachment uploading extremely fast
-    function compressImage(file, maxWidth = 1000, maxHeight = 1000, quality = 0.7) {
+    // Ultra-fast Image Compression with Safety Fallback Timeout
+    function compressImage(file, maxWidth = 800, maxHeight = 800, quality = 0.5) {
       return new Promise((resolve) => {
         if (!file || !file.type.startsWith('image/')) {
-          resolve(file); // Return as is if non-image (PDF etc.)
+          resolve(file); // Return immediately for non-images (PDFs)
           return;
         }
+        // Safety timeout: if image rendering hangs, fallback after 2.5s
+        const timeout = setTimeout(() => resolve(file), 2500);
+
         const reader = new FileReader();
         reader.readAsDataURL(file);
         reader.onload = (event) => {
           const img = new Image();
           img.src = event.target.result;
           img.onload = () => {
+            clearTimeout(timeout);
             let width = img.width;
             let height = img.height;
 
@@ -461,9 +463,9 @@
               }
             }, 'image/jpeg', quality);
           };
-          img.onerror = () => resolve(file);
+          img.onerror = () => { clearTimeout(timeout); resolve(file); };
         };
-        reader.onerror = () => resolve(file);
+        reader.onerror = () => { clearTimeout(timeout); resolve(file); };
       });
     }
 
@@ -568,9 +570,12 @@
       const currentVal = monthSelect.value;
       const months = new Set();
       
+      const nowStr = new Date().toISOString().slice(0, 7); // Current Month (YYYY-MM)
+      months.add(nowStr);
+
       allTx.forEach(t => {
         if (t.date) {
-          const m = t.date.slice(0, 7); // YYYY-MM
+          const m = t.date.slice(0, 7);
           months.add(m);
         }
       });
@@ -583,8 +588,11 @@
         monthSelect.innerHTML += `<option value="${m}">${monthName}</option>`;
       });
       
-      if ([...months].includes(currentVal) || currentVal === 'ALL') {
+      // Default to Current Month
+      if (currentVal && (currentVal === 'ALL' || [...months].includes(currentVal))) {
         monthSelect.value = currentVal;
+      } else {
+        monthSelect.value = nowStr;
       }
     }
 
@@ -755,7 +763,6 @@
         document.getElementById('prevPageBtn').disabled = (currentPage <= 1);
         document.getElementById('nextPageBtn').disabled = (currentPage >= totalPages);
       } else {
-        // When searching, show all matching entries
         paginationControls.classList.add('hidden');
       }
 
@@ -798,34 +805,59 @@
       });
     }
 
+    // Dynamic Rolling 7-Day Cashflow Chart
     function renderChart() {
       const ctx = document.getElementById('cashflowChart').getContext('2d');
       if (chartInstance) chartInstance.destroy();
+
+      const labels = [];
       const dataVals = [0, 0, 0, 0, 0, 0, 0];
+      const today = new Date();
+
+      const datesList = [];
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        const isoDate = d.toISOString().split('T')[0];
+        datesList.push(isoDate);
+        const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+        const dayNum = d.getDate();
+        labels.push(`${dayName} ${dayNum}`);
+      }
+
       allTx.forEach(t => {
         if (t.date && t.type !== 'Income' && parseFloat(t.amount) < 0) {
-          const d = new Date(t.date);
-          let dayIdx = d.getDay() - 1; if (dayIdx === -1) dayIdx = 6;
-          dataVals[dayIdx] += Math.abs(parseFloat(t.amount) || 0);
+          const idx = datesList.indexOf(t.date);
+          if (idx !== -1) {
+            dataVals[idx] += Math.abs(parseFloat(t.amount) || 0);
+          }
         }
       });
+
       chartInstance = new Chart(ctx, {
         type: 'bar',
         data: { 
-          labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], 
+          labels: labels, 
           datasets: [{ 
             data: dataVals, 
             backgroundColor: '#f59e0b', 
             borderRadius: 4,
-            barThickness: 16
+            barThickness: 18
           }] 
         },
         options: { 
           responsive: true, 
           maintainAspectRatio: false, 
-          plugins: { legend: { display: false } }, 
+          plugins: { 
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` Expense: ₹${ctx.parsed.y.toFixed(2)}`
+              }
+            }
+          }, 
           scales: { 
-            x: { grid: { display: false }, ticks: { color: '#777', font: { size: 10 } } }, 
+            x: { grid: { display: false }, ticks: { color: '#aaa', font: { size: 10 } } }, 
             y: { grid: { color: '#222' }, ticks: { color: '#777', font: { size: 9 } } } 
           } 
         }
@@ -846,7 +878,6 @@
       if (type === 'Income') { 
         document.getElementById('txModalTitle').innerText = 'Add Income'; 
         siteContainer.style.display = 'none'; 
-        // Default category for Income: Account Transfer
         if ([...categorySelect.options].some(o => o.value === 'Account Transfer')) {
           categorySelect.value = 'Account Transfer';
         }
@@ -854,7 +885,6 @@
       else { 
         document.getElementById('txModalTitle').innerText = 'Add Expense'; 
         siteContainer.style.display = 'block'; 
-        // Default category for Expense: Expense
         if ([...categorySelect.options].some(o => o.value === 'Expense')) {
           categorySelect.value = 'Expense';
         }
@@ -886,6 +916,7 @@
 
     function closeTransactionModal() { document.getElementById('txForm').reset(); document.getElementById('txModal').classList.add('hidden'); }
 
+    // Fast Transaction Saving with Upload Timeout Guard
     async function saveTransaction(e) {
       e.preventDefault();
       const id = document.getElementById('editDocId').value;
@@ -906,17 +937,24 @@
         if (existingItem) fileUrl = existingItem.fileUrl || '';
 
         if (fileInput.files && fileInput.files[0]) {
-          // Fast compress image before uploading
           const processedFile = await compressImage(fileInput.files[0]);
 
           if (!navigator.onLine) {
-            try { fileUrl = await getBase64(processedFile); } catch(err) { console.error("Base64 Failed", err); }
+            try { fileUrl = await getBase64(processedFile); } catch(err) {}
           } else {
             try {
               const storageRef = window.ref(window.storage, `receipts/${Date.now()}_${processedFile.name}`);
-              const snapshot = await window.uploadBytes(storageRef, processedFile);
+              
+              // Hard 6s Timeout guard on Cloud Upload
+              const uploadPromise = window.uploadBytes(storageRef, processedFile);
+              const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 6000));
+
+              const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
               fileUrl = await window.getDownloadURL(snapshot.ref);
-            } catch(err) { console.log("File upload skipped", err); }
+            } catch(err) {
+              // Fallback to fast base64 string on timeout or network error so saving never gets stuck
+              fileUrl = await getBase64(processedFile);
+            }
           }
         }
 
@@ -927,7 +965,7 @@
           let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
           offlineData.push(dataPayload);
           localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
-          closeTransactionModal(); loadDataFromFirebase(); alert("Saved offline!");
+          closeTransactionModal(); loadDataFromFirebase();
           return;
         }
 
@@ -936,7 +974,7 @@
         
         closeTransactionModal(); loadDataFromFirebase();
       } catch (err) {
-        alert("Error saving: " + err.message);
+        alert("Error saving transaction: " + err.message);
       } finally {
         saveBtn.innerText = "Save Entry"; saveBtn.disabled = false;
       }
@@ -1014,16 +1052,147 @@
       sortedAll.forEach(t => {
         const amt = parseFloat(Math.abs(t.amount) || 0);
         const isInc = (t.type === 'Income' || parseFloat(t.amount) > 0);
-        if (isInc) {
-          runningAccountBal += amt;
-        } else {
-          runningAccountBal -= amt;
-        }
+        if (isInc) runningAccountBal += amt;
+        else runningAccountBal -= amt;
         const key = t.id || String(t.createdAt);
         txBalMap.set(key, runningAccountBal);
       });
 
       return txBalMap;
+    }
+
+    // Export Options
+    function exportJsonFile() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ transactions: allTx, categories: customCategories }, null, 2));
+      const dlAnchorElem = document.createElement('a');
+      dlAnchorElem.setAttribute("href", dataStr);
+      dlAnchorElem.setAttribute("download", `Ismail_Expense_Backup_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(dlAnchorElem);
+      dlAnchorElem.click();
+      dlAnchorElem.remove();
+    }
+
+    function importJsonFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          const txs = Array.isArray(parsed) ? parsed : (parsed.transactions || []);
+          if (parsed.categories && Array.isArray(parsed.categories)) {
+            customCategories = Array.from(new Set([...customCategories, ...parsed.categories]));
+            localStorage.setItem('ismail_custom_cats', JSON.stringify(customCategories));
+            populateCategoryDropdowns();
+          }
+          if (txs.length === 0) return alert("No transactions found in JSON file.");
+          
+          const modal = document.getElementById('uploadProgressModal');
+          const bar = document.getElementById('uploadProgressBar');
+          const text = document.getElementById('uploadProgressText');
+          const detail = document.getElementById('uploadStatusDetail');
+          modal.classList.remove('hidden');
+
+          let count = 0;
+          for (let t of txs) {
+            delete t.id;
+            if (!t.createdAt) t.createdAt = Date.now();
+            if (navigator.onLine && window.db) {
+              await window.addDoc(window.collection(window.db, "transactions"), t);
+            } else {
+              t.isOffline = true;
+              let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+              offlineData.push(t);
+              localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+            }
+            count++;
+            let pct = Math.round((count / txs.length) * 100);
+            bar.style.width = pct + '%';
+            text.innerText = pct + '%';
+            detail.innerText = `Imported ${count} of ${txs.length} entries`;
+          }
+          setTimeout(() => {
+            modal.classList.add('hidden');
+            alert(`Successfully imported ${txs.length} entries!`);
+            loadDataFromFirebase();
+          }, 300);
+        } catch (err) {
+          alert("Failed to parse JSON file: " + err.message);
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    function importExcelFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = new Uint8Array(event.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheet = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheet];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+          if (rows.length === 0) return alert("Excel file is empty.");
+
+          const modal = document.getElementById('uploadProgressModal');
+          const bar = document.getElementById('uploadProgressBar');
+          const text = document.getElementById('uploadProgressText');
+          const detail = document.getElementById('uploadStatusDetail');
+          modal.classList.remove('hidden');
+
+          let count = 0;
+          for (let row of rows) {
+            const dateVal = row['Date'] || row['date'] || new Date().toISOString().slice(0, 10);
+            const categoryVal = row['Category'] || row['category'] || 'Expense';
+            const descVal = row['Description'] || row['Title'] || row['title'] || row['description'] || 'Excel Entry';
+            const siteVal = row['Site/Project'] || row['Site'] || row['Project'] || row['site'] || row['project'] || '';
+            let rawAmt = parseFloat(row['Amount'] || row['amount'] || row['Expense'] || row['Income'] || 0);
+            
+            let typeVal = row['Type'] || row['type'] || (rawAmt >= 0 ? 'Expense' : 'Income');
+            if (row['Income'] && parseFloat(row['Income']) > 0) { typeVal = 'Income'; rawAmt = parseFloat(row['Income']); }
+            if (row['Expense'] && parseFloat(row['Expense']) > 0) { typeVal = 'Expense'; rawAmt = -Math.abs(parseFloat(row['Expense'])); }
+
+            const payload = {
+              title: String(descVal),
+              description: String(descVal),
+              amount: typeVal === 'Income' ? Math.abs(rawAmt) : -Math.abs(rawAmt),
+              category: String(categoryVal),
+              date: String(dateVal).slice(0, 10),
+              site: String(siteVal),
+              siteProject: String(siteVal),
+              type: typeVal,
+              createdAt: Date.now()
+            };
+
+            if (navigator.onLine && window.db) {
+              await window.addDoc(window.collection(window.db, "transactions"), payload);
+            } else {
+              payload.isOffline = true;
+              let offlineData = JSON.parse(localStorage.getItem('ismail_offline_tx') || '[]');
+              offlineData.push(payload);
+              localStorage.setItem('ismail_offline_tx', JSON.stringify(offlineData));
+            }
+            count++;
+            let pct = Math.round((count / rows.length) * 100);
+            bar.style.width = pct + '%';
+            text.innerText = pct + '%';
+            detail.innerText = `Imported ${count} of ${rows.length} rows`;
+          }
+          setTimeout(() => {
+            modal.classList.add('hidden');
+            alert(`Successfully imported ${rows.length} entries from Excel!`);
+            loadDataFromFirebase();
+          }, 300);
+        } catch(err) {
+          alert("Error importing Excel file: " + err.message);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+      e.target.value = '';
     }
 
     async function shareSelectedJPEG() {
@@ -1048,13 +1217,8 @@
         const isInc = (item.type === 'Income' || parseFloat(item.amount) > 0);
         const isSalary = (item.category || '').toLowerCase() === 'salary' || /സാലറി|ശമ്പളം/i.test(item.category || '');
 
-        if (isInc) { 
-          incText = amt.toFixed(2); 
-          totalInc += amt; 
-        } else { 
-          expText = amt.toFixed(2); 
-          totalExp += amt; 
-        }
+        if (isInc) { incText = amt.toFixed(2); totalInc += amt; } 
+        else { expText = amt.toFixed(2); totalExp += amt; }
 
         const key = item.id || String(item.createdAt);
         const rowBal = txBalMap.get(key) ?? 0;
