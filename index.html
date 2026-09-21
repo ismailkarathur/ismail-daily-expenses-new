@@ -133,23 +133,19 @@
         </div>
       </div>
 
-      <!-- Small Cards -->
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
-          <span class="text-[9px] text-gray-400 uppercase font-semibold">MONTH INCOME</span>
-          <div id="totalIncomeText" class="text-sm font-extrabold text-green-400 mt-0.5">₹0.00</div>
+      <!-- Small Cards (Top Category Removed & Cards Size Made Smaller) -->
+      <div class="grid grid-cols-3 gap-2">
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2 rounded-lg text-center sm:text-left">
+          <span class="text-[8px] sm:text-[9px] text-gray-400 uppercase font-semibold tracking-tight">MONTH INCOME</span>
+          <div id="totalIncomeText" class="text-xs sm:text-sm font-extrabold text-green-400 mt-0.5 truncate">₹0.00</div>
         </div>
-        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
-          <span class="text-[9px] text-gray-400 uppercase font-semibold">MONTH EXPENSES</span>
-          <div id="totalExpenseText" class="text-sm font-extrabold text-amber-500 mt-0.5">₹0.00</div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2 rounded-lg text-center sm:text-left">
+          <span class="text-[8px] sm:text-[9px] text-gray-400 uppercase font-semibold tracking-tight">MONTH EXPENSES</span>
+          <div id="totalExpenseText" class="text-xs sm:text-sm font-extrabold text-amber-500 mt-0.5 truncate">₹0.00</div>
         </div>
-        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
-          <span class="text-[9px] text-gray-400 uppercase font-semibold">TRANSACTIONS</span>
-          <div id="totalTxCountText" class="text-sm font-bold text-white mt-0.5">0</div>
-        </div>
-        <div class="bg-[#141414] border border-[#2a2a2a] p-2.5 rounded-xl">
-          <span class="text-[9px] text-gray-400 uppercase font-semibold">TOP CATEGORY</span>
-          <div id="topCategoryText" class="text-sm font-bold text-white mt-0.5 truncate">-</div>
+        <div class="bg-[#141414] border border-[#2a2a2a] p-2 rounded-lg text-center sm:text-left">
+          <span class="text-[8px] sm:text-[9px] text-gray-400 uppercase font-semibold tracking-tight">TRANSACTIONS</span>
+          <div id="totalTxCountText" class="text-xs sm:text-sm font-bold text-white mt-0.5 truncate">0</div>
         </div>
       </div>
 
@@ -665,11 +661,12 @@
       siteFilter.value = currentVal;
     }
 
+    // Default Date Filter set to Current Month (e.g., Sep 2026)
     function populateMonthDropdown() {
       const monthSelect = document.getElementById('cardMonthSelect');
       const currentVal = monthSelect.value;
       const months = new Set();
-      const nowStr = new Date().toISOString().slice(0, 7);
+      const nowStr = new Date().toISOString().slice(0, 7); // e.g. "2026-09"
       months.add(nowStr);
 
       allTx.forEach(t => {
@@ -684,8 +681,12 @@
         monthSelect.innerHTML += `<option value="${m}">${monthName}</option>`;
       });
       
-      if (currentVal && (currentVal === 'ALL' || [...months].includes(currentVal))) monthSelect.value = currentVal;
-      else monthSelect.value = nowStr;
+      // Default to Current Month unless another month was explicitly chosen
+      if (currentVal && currentVal !== 'ALL' && [...months].includes(currentVal)) {
+        monthSelect.value = currentVal;
+      } else {
+        monthSelect.value = nowStr;
+      }
     }
 
     function openCategoryModal() { document.getElementById('categoryModal').classList.remove('hidden'); }
@@ -768,7 +769,6 @@
       const selectedMonth = document.getElementById('cardMonthSelect').value;
       let totalOverallIncome = 0, totalOverallExpense = 0;
       let monthIncome = 0, monthExpense = 0;
-      let catCounts = {};
 
       allTx.forEach(t => {
         const amt = parseFloat(t.amount || 0);
@@ -776,21 +776,11 @@
         const val = Math.abs(amt);
 
         if (isInc) totalOverallIncome += val;
-        else {
-          totalOverallExpense += val;
-          if (selectedMonth === 'ALL') {
-            const cat = t.category || 'Others';
-            catCounts[cat] = (catCounts[cat] || 0) + val;
-          }
-        }
+        else totalOverallExpense += val;
 
         if (selectedMonth !== 'ALL' && t.date && t.date.startsWith(selectedMonth)) {
           if (isInc) monthIncome += val;
-          else {
-            monthExpense += val;
-            const cat = t.category || 'Others';
-            catCounts[cat] = (catCounts[cat] || 0) + val;
-          }
+          else monthExpense += val;
         }
       });
 
@@ -802,12 +792,6 @@
       document.getElementById('totalIncomeText').innerText = `₹${displayIncome.toFixed(2)}`;
       document.getElementById('totalExpenseText').innerText = `₹${displayExpense.toFixed(2)}`;
       document.getElementById('totalTxCountText').innerText = allTx.length;
-      
-      let topCat = '-', maxVal = 0;
-      for (const [cat, val] of Object.entries(catCounts)) {
-        if (val > maxVal) { maxVal = val; topCat = cat; }
-      }
-      document.getElementById('topCategoryText').innerText = topCat;
     }
 
     function changePage(direction) {
