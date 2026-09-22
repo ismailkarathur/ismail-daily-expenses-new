@@ -2,7 +2,7 @@
 <html lang="en" class="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
   <title>Ismail Expense Manager - Pro</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -104,18 +104,6 @@
       </div>
       
       <div class="flex items-center gap-2 flex-wrap">
-        <!-- Screen Zoom Selector -->
-        <div class="flex items-center gap-1 bg-[#2a2a2a] border border-[#3a3a3a] rounded-xl px-2 py-1">
-          <span class="text-[10px] text-gray-400 font-bold">🔍</span>
-          <select id="zoomSelect" onchange="applyScreenZoom(this.value)" class="bg-transparent text-amber-400 text-xs font-bold outline-none cursor-pointer">
-            <option value="0.5">50%</option>
-            <option value="0.75">75%</option>
-            <option value="1.0" selected>100%</option>
-            <option value="1.25">125%</option>
-            <option value="1.5">150%</option>
-          </select>
-        </div>
-
         <select id="currencySelect" onchange="changeCurrency(this.value)" class="bg-[#2a2a2a] border border-[#3a3a3a] text-amber-400 text-xs font-bold px-2 py-2 rounded-xl outline-none">
           <option value="AED">AED (د.إ)</option>
           <option value="INR">INR (₹)</option>
@@ -230,8 +218,14 @@
         <div class="grid grid-cols-2 md:grid-cols-4 gap-2 w-full">
           <input type="text" id="filterKeyword" oninput="renderTable()" placeholder="Search Description..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
           
-          <!-- Dedicated Person / Name Filter -->
-          <input type="text" id="filterPerson" oninput="renderTable()" placeholder="Person Name (e.g. Thushan, Absala)" class="bg-[#121212] border border-amber-500/40 p-2 rounded-xl text-xs text-amber-300 font-medium">
+          <!-- Salary Person Filter: visible only when Salary is selected -->
+          <div id="salaryPersonFilterWrap" class="relative w-full hidden">
+            <button type="button" onclick="toggleSalaryPersonFilter(event)" class="w-full bg-[#121212] border border-red-500/40 p-2 rounded-xl text-xs text-red-300 text-left flex justify-between items-center h-full">
+              <span id="salaryPersonFilterLabel" class="truncate pr-2">Salary Person</span>
+              <span class="text-[8px] text-gray-500">▼</span>
+            </button>
+            <div id="salaryPersonFilterDropdown" class="hidden absolute z-50 w-full mt-1 bg-[#1e1e1e] border border-red-500/30 rounded-xl shadow-xl max-h-56 overflow-y-auto p-2 space-y-0.5"></div>
+          </div>
 
           <input type="text" id="filterSiteKeyword" oninput="renderTable()" placeholder="Search Site..." class="bg-[#121212] border border-[#2a2a2a] p-2 rounded-xl text-xs text-white">
 
@@ -465,6 +459,7 @@
     const defaultCategories = ['Food', 'Travel', 'Bills', 'Shopping', 'Salary', 'Petrol', 'Account Transfer', 'Porter', 'Taxi', 'Others', 'Thalha', 'Pickup', 'Expense'];
     let customCategories = [...defaultCategories];
     let selectedFilterCategories = [];
+    let selectedSalaryPersons = [];
     let chartInstance = null;
     let activeCameraStream = null;
     let pendingAttachmentBase64 = '';
@@ -478,24 +473,12 @@
       const savedCats = localStorage.getItem('ismail_custom_cats');
       if (savedCats) { try { customCategories = JSON.parse(savedCats); } catch(e){} }
       
-      const savedZoom = localStorage.getItem('ismail_screen_zoom') || '1.0';
-      document.getElementById('zoomSelect').value = savedZoom;
-      applyScreenZoom(savedZoom);
-
       document.getElementById('currencySelect').value = currentCurrency;
       updateCurrencyLabels();
       populateCategoryDropdowns();
       updateNetworkStatus();
       loadDataFromFirebase();
     });
-
-    function applyScreenZoom(zoomVal) {
-      localStorage.setItem('ismail_screen_zoom', zoomVal);
-      const appContainer = document.getElementById('appContainer');
-      if (appContainer) {
-        appContainer.style.transform = `scale(${zoomVal})`;
-      }
-    }
 
     function updateNetworkStatus() {
       const badge = document.getElementById('networkStatusBadge');
@@ -684,11 +667,15 @@
     function closeAllDropdowns(e) {
       const menu = document.getElementById('topMenuDropdown');
       const catDropdown = document.getElementById('categoryFilterDropdown');
+      const salaryDropdown = document.getElementById('salaryPersonFilterDropdown');
       if (menu && !e.target.closest('#topMenuDropdown') && !e.target.closest('button[onclick="toggleMenuDropdown(event)"]')) {
         menu.classList.add('hidden');
       }
       if (catDropdown && !e.target.closest('#categoryFilterDropdown') && !e.target.closest('.relative.w-full')) {
         catDropdown.classList.add('hidden');
+      }
+      if (salaryDropdown && !e.target.closest('#salaryPersonFilterDropdown') && !e.target.closest('#salaryPersonFilterWrap')) {
+        salaryDropdown.classList.add('hidden');
       }
     }
 
@@ -732,9 +719,62 @@
       if (selectedFilterCategories.length === 0) label.innerText = 'All Categories';
       else if (selectedFilterCategories.length === 1) label.innerText = selectedFilterCategories[0];
       else label.innerText = `${selectedFilterCategories.length} Selected`;
-      
+
+      const hasSalary = selectedFilterCategories.some(cat => (cat || '').toLowerCase() === 'salary' || /സാലറി|ശമ്പളം/i.test(cat || ''));
+      const wrap = document.getElementById('salaryPersonFilterWrap');
+      if (wrap) {
+        wrap.classList.toggle('hidden', !hasSalary);
+        if (!hasSalary) {
+          selectedSalaryPersons = [];
+          updateSalaryPersonFilterLabel();
+        } else {
+          populateSalaryPersonFilter();
+        }
+      }
       currentPage = 1;
       renderTable();
+    }
+
+    function toggleSalaryPersonFilter(e) {
+      e.stopPropagation();
+      const dd = document.getElementById('salaryPersonFilterDropdown');
+      if (dd) dd.classList.toggle('hidden');
+    }
+
+    function getSalaryPersonName(item) {
+      return String(item.title || item.description || '').trim();
+    }
+
+    function populateSalaryPersonFilter() {
+      const dd = document.getElementById('salaryPersonFilterDropdown');
+      if (!dd) return;
+      const salaryItems = allTx.filter(item => (item.category || '').toLowerCase() === 'salary' || /സാലറി|ശമ്പളം/i.test(item.category || ''));
+      const names = [...new Set(salaryItems.map(getSalaryPersonName).filter(Boolean))].sort((a,b) => a.localeCompare(b, undefined, {numeric:true, sensitivity:'base'}));
+      selectedSalaryPersons = selectedSalaryPersons.filter(name => names.includes(name));
+      dd.innerHTML = names.length ? names.map(name => {
+        const checked = selectedSalaryPersons.includes(name) ? 'checked' : '';
+        const safe = name.replace(/\\/g,'\\\\').replace(/"/g,'&quot;');
+        return `<label class="flex items-center gap-2 text-xs text-gray-300 p-1.5 hover:bg-[#2a2a2a] rounded cursor-pointer">
+                  <input type="checkbox" value="${safe}" class="salary-person-cb accent-red-500 h-3.5 w-3.5" onchange="updateSalaryPersonFilter()" ${checked}>
+          <span class="truncate">${name.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+        </label>`;
+      }).join('') : '<div class="text-xs text-gray-500 p-2">No Salary person names found.</div>';
+      updateSalaryPersonFilterLabel();
+    }
+
+    function updateSalaryPersonFilter() {
+      selectedSalaryPersons = Array.from(document.querySelectorAll('.salary-person-cb:checked')).map(cb => cb.value);
+      updateSalaryPersonFilterLabel();
+      currentPage = 1;
+      renderTable();
+    }
+
+    function updateSalaryPersonFilterLabel() {
+      const label = document.getElementById('salaryPersonFilterLabel');
+      if (!label) return;
+      if (selectedSalaryPersons.length === 0) label.innerText = 'Salary Person (All)';
+      else if (selectedSalaryPersons.length === 1) label.innerText = selectedSalaryPersons[0];
+      else label.innerText = `${selectedSalaryPersons.length} Persons Selected`;
     }
 
     function populateSiteDropdown() {
@@ -919,20 +959,20 @@
       tbody.innerHTML = '';
       
       const keyword = document.getElementById('filterKeyword').value.toLowerCase().trim();
-      const personKw = (document.getElementById('filterPerson')?.value || '').toLowerCase().trim();
       const siteKeyword = (document.getElementById('filterSiteKeyword')?.value || '').toLowerCase().trim();
       const siteFilterVal = document.getElementById('filterSite').value;
       const fromDate = document.getElementById('filterFromDate').value;
       const toDate = document.getElementById('filterToDate').value;
 
-      const isSearching = keyword !== '' || personKw !== '' || siteKeyword !== '' || siteFilterVal !== '' || fromDate !== '' || toDate !== '' || selectedFilterCategories.length > 0;
+      const isSearching = keyword !== '' || siteKeyword !== '' || siteFilterVal !== '' || fromDate !== '' || toDate !== '' || selectedFilterCategories.length > 0 || selectedSalaryPersons.length > 0;
 
       const filtered = allTx.filter(item => {
         const descText = (item.title || item.description || '').toLowerCase();
         const matchesKw = descText.includes(keyword) || (item.category || '').toLowerCase().includes(keyword);
         
-        // Dedicated Person Search Filter (checks description, site, and category)
-        const matchesPerson = !personKw || descText.includes(personKw) || (item.category || '').toLowerCase().includes(personKw) || (item.site || '').toLowerCase().includes(personKw);
+        const isItemSalary = (item.category || '').toLowerCase() === 'salary' || /സാലറി|ശമ്പളം/i.test(item.category || '');
+        const itemPersonName = getSalaryPersonName(item);
+        const matchesSalaryPerson = selectedSalaryPersons.length === 0 || !isItemSalary || selectedSalaryPersons.includes(itemPersonName);
 
         const itemSite = (item.site || item.siteProject || '').toLowerCase();
         const matchesSiteKw = !siteKeyword || itemSite.includes(siteKeyword);
@@ -942,7 +982,7 @@
         const matchesFrom = !fromDate || item.date >= fromDate;
         const matchesTo = !toDate || item.date <= toDate;
 
-        return matchesKw && matchesPerson && matchesSiteKw && matchesCat && matchesSite && matchesFrom && matchesTo;
+        return matchesKw && matchesSalaryPerson && matchesSiteKw && matchesCat && matchesSite && matchesFrom && matchesTo;
       });
 
       let displayedItems = filtered;
@@ -1206,7 +1246,10 @@
 
     function clearAllFilters() {
       document.getElementById('filterKeyword').value = '';
-      if(document.getElementById('filterPerson')) document.getElementById('filterPerson').value = '';
+      selectedSalaryPersons = [];
+      const salaryWrap = document.getElementById('salaryPersonFilterWrap');
+      if (salaryWrap) salaryWrap.classList.add('hidden');
+      updateSalaryPersonFilterLabel();
       if(document.getElementById('filterSiteKeyword')) document.getElementById('filterSiteKeyword').value = '';
       document.querySelectorAll('.cat-filter-cb').forEach(cb => cb.checked = false);
       selectedFilterCategories = [];
@@ -1515,11 +1558,69 @@
     }
 
     function exportExcel() {
-      const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
-      const ws = XLSX.utils.json_to_sheet(selected);
+      const selectedItems = getSelectedItems();
+      const selected = selectedItems.length > 0 ? selectedItems : allTx;
+      if (selected.length === 0) return alert("No data available to export.");
+
+      // Keep Excel in exactly the same logical order/columns as the PDF report.
+      const sorted = [...selected].sort((a, b) => {
+        const dDiff = new Date(a.date || 0) - new Date(b.date || 0);
+        if (dDiff !== 0) return dDiff;
+        return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+      });
+
+      const txBalMap = getTransactionBalanceMap();
+      let totalInc = 0, totalExp = 0, lastAvailableBal = 0;
+      const rows = [[
+        'Date', 'Category', 'Description', 'Site / Project', 'Income', 'Expense', 'Balance'
+      ]];
+
+      sorted.forEach(item => {
+        const amt = parseFloat(Math.abs(item.amount) || 0);
+        const isInc = (item.type === 'Income' || parseFloat(item.amount) > 0);
+        const key = item.id || String(item.createdAt);
+        const rowBal = txBalMap.get(key) ?? 0;
+        lastAvailableBal = rowBal;
+        if (isInc) totalInc += amt; else totalExp += amt;
+
+        rows.push([
+          item.date || '',
+          item.category || '',
+          item.title || item.description || '',
+          item.site || item.siteProject || '-',
+          isInc ? formatMoney(amt) : '-',
+          !isInc ? formatMoney(amt) : '-',
+          formatMoney(rowBal)
+        ]);
+      });
+
+      rows.push(['', '', '', 'TOTAL', formatMoney(totalInc), formatMoney(totalExp), formatMoney(lastAvailableBal)]);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 13 }, { wch: 18 }, { wch: 34 }, { wch: 28 },
+        { wch: 17 }, { wch: 17 }, { wch: 17 }
+      ];
+      ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+      ws['!autofilter'] = { ref: `A1:G${rows.length - 1}` };
+
+      // Styling is supported by common XLSX builds; values remain readable even if a viewer ignores styles.
+      const headerStyle = { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: 'F59E0B' } }, alignment: { horizontal: 'center', vertical: 'center' } };
+      for (let c = 0; c < 7; c++) ws[XLSX.utils.encode_cell({r:0,c})].s = headerStyle;
+      const totalRow = rows.length - 1;
+      for (let c = 0; c < 7; c++) ws[XLSX.utils.encode_cell({r:totalRow,c})].s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+
+      for (let r = 1; r < totalRow; r++) {
+        const item = sorted[r - 1];
+        const isSalary = (item.category || '').toLowerCase() === 'salary' || /സാലറി|ശമ്പളം/i.test(item.category || '');
+        if (isSalary) {
+          for (let c = 0; c < 7; c++) ws[XLSX.utils.encode_cell({r,c})].s = { fill: { fgColor: { rgb: 'FEF2F2' } }, font: { color: { rgb: 'DC2626' }, bold: true } };
+        }
+      }
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Expenses");
-      XLSX.writeFile(wb, `Ismail_Expenses.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, 'Expenses');
+      XLSX.writeFile(wb, `Ismail_Expenses_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
   </script>
 </body>
