@@ -766,7 +766,7 @@
             canvas.height = img.height * scale;
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-            pendingAttachmentBase64 = canvas.toDataURL('image/jpeg', 0.4);
+            pendingAttachmentBase64 = canvas.toDataURL('image/jpeg', 0.88);
             showAttachmentPreview(pendingAttachmentBase64, file.name, true);
           };
         } else {
