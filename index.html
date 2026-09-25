@@ -1099,7 +1099,7 @@
 
       allTx.forEach(t => {
         const amt = parseFloat(t.amount || 0);
-        const isInc = t.type === 'Income' || amt > 0;
+        const isInc = t.type === 'Income';
         const val = Math.abs(amt);
 
         if (isInc) totalOverallIncome += val;
