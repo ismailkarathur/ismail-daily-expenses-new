@@ -1115,7 +1115,10 @@
       const displayExpense = selectedMonth === 'ALL' ? totalOverallExpense : monthExpense;
       const availableBalance = totalOverallIncome - totalOverallExpense;
 
-      document.getElementById('availableBalanceText').innerText = formatMoney(availableBalance);
+      const balanceEl = document.getElementById('availableBalanceText');
+balanceEl.innerText = (availableBalance < 0 ? '-' : '') + formatMoney(availableBalance);
+balanceEl.classList.toggle('text-red-400', availableBalance < 0);
+balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
       document.getElementById('totalIncomeText').innerText = formatMoney(displayIncome);
       document.getElementById('totalExpenseText').innerText = formatMoney(displayExpense);
       document.getElementById('totalTxCountText').innerText = allTx.length;
