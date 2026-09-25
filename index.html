@@ -724,7 +724,7 @@
       if (!video.videoWidth) return;
 
       const canvas = document.createElement('canvas');
-      const maxW = 500;
+      const maxW = 1400;
       let scale = maxW / video.videoWidth;
       if (scale > 1) scale = 1;
 
@@ -734,7 +734,7 @@
       const ctx = canvas.getContext('2d');
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      pendingAttachmentBase64 = canvas.toDataURL('image/jpeg', 0.4);
+      canvas.toDataURL('image/jpeg', 0.88);', 0.4); = canvas.toDataURL('image/jpeg', 0.4);
       
       stopInAppCamera();
       showAttachmentPreview(pendingAttachmentBase64, "Captured Photo.jpg", true);
@@ -759,7 +759,7 @@
           img.src = evt.target.result;
           img.onload = () => {
             const canvas = document.createElement('canvas');
-            const maxW = 500;
+            const maxW = 1400;
             let scale = maxW / img.width;
             if (scale > 1) scale = 1;
             canvas.width = img.width * scale;
