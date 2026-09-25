@@ -1646,14 +1646,14 @@ balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
             <td class="p-2.5 border border-gray-300 text-gray-600">${item.site || item.siteProject || '-'}</td>
             <td class="p-2.5 border border-gray-300 text-right font-mono text-green-700 font-bold">${incText}</td>
             <td class="p-2.5 border border-gray-300 text-right font-mono" style="${expStyle}">${expText}</td>
-            <td class="p-2.5 border border-gray-300 text-right font-mono font-bold text-gray-900">${formatMoney(rowBal)}</td>
+            <td class="p-2.5 border border-gray-300 text-right font-mono font-bold text-gray-900">${formatBalance(rowBal)}</td>
           </tr>
         `;
       });
 
       document.getElementById('reportTotalIncome').innerText = formatMoney(totalInc);
       document.getElementById('reportTotalExpense').innerText = formatMoney(totalExp);
-      document.getElementById('reportFinalBalance').innerText = formatMoney(lastAvailableBal);
+      document.getElementById('reportFinalBalance').innerText = formatBalance(lastAvailableBal);
       document.getElementById('reportSubHeader').innerText = `${selected.length} ticked entries summary report`;
 
       const reportElem = document.getElementById('jpegReportContainer');
@@ -1698,10 +1698,10 @@ balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
         const rowBal = txBalMap.get(key) ?? 0;
         lastAvailableBal = rowBal;
 
-        tableRows.push([ t.date, t.category, t.title || t.description || '', t.site || t.siteProject || '-', inc, exp, formatMoney(rowBal) ]);
+        tableRows.push([ t.date, t.category, t.title || t.description || '', t.site || t.siteProject || '-', inc, exp, formatBalance(rowBal) ]);
       });
 
-      tableRows.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatMoney(totalInc), styles: { fontStyle: 'bold' } }, { content: formatMoney(totalExp), styles: { fontStyle: 'bold' } }, { content: formatMoney(lastAvailableBal), styles: { fontStyle: 'bold' } } ]);
+      tableRows.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBalance(totalInc), styles: { fontStyle: 'bold' } }, { content: formatMoney(totalExp), styles: { fontStyle: 'bold' } }, { content: formatMoney(lastAvailableBal), styles: { fontStyle: 'bold' } } ]);
 
       doc.setFontSize(16);
       doc.text("Ismail Expense Manager - Report", 14, 15);
@@ -1765,11 +1765,11 @@ balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
           item.site || item.siteProject || '-',
           isInc ? formatMoney(amt) : '-',
           !isInc ? formatMoney(amt) : '-',
-          formatMoney(rowBal)
+          formatBalance(rowBal)
         ]);
       });
 
-      rows.push(['', '', '', 'TOTAL', formatMoney(totalInc), formatMoney(totalExp), formatMoney(lastAvailableBal)]);
+      rows.push(['', '', '', 'TOTAL', formatBalance(totalInc), formatBalance(totalExp), formatMoney(lastAvailableBal)]);
 
       const ws = XLSX.utils.aoa_to_sheet(rows);
       ws['!cols'] = [
