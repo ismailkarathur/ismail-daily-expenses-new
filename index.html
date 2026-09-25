@@ -694,6 +694,12 @@
       return `${sign}${symbol}${Math.abs(num).toFixed(2)}`;
     }
 
+    // For running/final balances (can be negative) - shows "-" but never "+"
+    function formatBalance(amount) {
+      const num = parseFloat(amount || 0);
+      return (num < 0 ? '-' : '') + formatMoney(num);
+    }
+
     // In-App Camera Controller
     async function startInAppCamera() {
       const modal = document.getElementById('cameraModal');
@@ -1116,9 +1122,9 @@
       const availableBalance = totalOverallIncome - totalOverallExpense;
 
       const balanceEl = document.getElementById('availableBalanceText');
-balanceEl.innerText = (availableBalance < 0 ? '-' : '') + formatMoney(availableBalance);
-balanceEl.classList.toggle('text-red-400', availableBalance < 0);
-balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
+      balanceEl.innerText = (availableBalance < 0 ? '-' : '') + formatMoney(availableBalance);
+      balanceEl.classList.toggle('text-red-400', availableBalance < 0);
+      balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
       document.getElementById('totalIncomeText').innerText = formatMoney(displayIncome);
       document.getElementById('totalExpenseText').innerText = formatMoney(displayExpense);
       document.getElementById('totalTxCountText').innerText = allTx.length;
@@ -1701,7 +1707,7 @@ balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
         tableRows.push([ t.date, t.category, t.title || t.description || '', t.site || t.siteProject || '-', inc, exp, formatBalance(rowBal) ]);
       });
 
-      tableRows.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatBalance(totalInc), styles: { fontStyle: 'bold' } }, { content: formatMoney(totalExp), styles: { fontStyle: 'bold' } }, { content: formatMoney(lastAvailableBal), styles: { fontStyle: 'bold' } } ]);
+      tableRows.push([{ content: 'TOTAL', colSpan: 4, styles: { halign: 'right', fontStyle: 'bold' } }, { content: formatMoney(totalInc), styles: { fontStyle: 'bold' } }, { content: formatMoney(totalExp), styles: { fontStyle: 'bold' } }, { content: formatBalance(lastAvailableBal), styles: { fontStyle: 'bold' } } ]);
 
       doc.setFontSize(16);
       doc.text("Ismail Expense Manager - Report", 14, 15);
@@ -1769,7 +1775,7 @@ balanceEl.classList.toggle('text-amber-400', availableBalance >= 0);
         ]);
       });
 
-      rows.push(['', '', '', 'TOTAL', formatBalance(totalInc), formatBalance(totalExp), formatMoney(lastAvailableBal)]);
+      rows.push(['', '', '', 'TOTAL', formatMoney(totalInc), formatMoney(totalExp), formatBalance(lastAvailableBal)]);
 
       const ws = XLSX.utils.aoa_to_sheet(rows);
       ws['!cols'] = [
