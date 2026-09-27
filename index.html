@@ -1365,11 +1365,12 @@
       try {
         let fileUrl = pendingAttachmentBase64 || '';
 
+        const existingCreatedAt = parseInt(document.getElementById('txCreatedAt').value, 10);
         const dataPayload = { 
           title, description: title, 
           amount: type === 'Income' ? amountVal : -amountVal, 
           category, date, site, siteProject: site, 
-          type, fileUrl, createdAt: Date.now() 
+          type, fileUrl, createdAt: id ? (existingCreatedAt || Date.now()) : Date.now() 
         };
 
         if (!navigator.onLine) {
