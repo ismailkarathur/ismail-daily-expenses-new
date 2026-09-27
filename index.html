@@ -39,13 +39,8 @@
       }
     }
   </script>
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <!-- Export & Import Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Export & Import Libraries: loaded on-demand (see loadScriptOnce) to speed up initial page load -->
 </head>
 <body class="bg-[#121212] text-amber-50 min-h-screen font-sans antialiased pb-10 select-none" onclick="closeAllDropdowns(event)">
 
@@ -698,6 +693,19 @@
     function formatBalance(amount) {
       const num = parseFloat(amount || 0);
       return (num < 0 ? '-' : '') + formatMoney(num);
+    }
+
+    const _loadedScripts = {};
+    function loadScriptOnce(src) {
+      if (_loadedScripts[src]) return _loadedScripts[src];
+      _loadedScripts[src] = new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.onload = resolve;
+        s.onerror = reject;
+        document.head.appendChild(s);
+      });
+      return _loadedScripts[src];
     }
 
     function dirhamSVG(size) {
@@ -1543,9 +1551,10 @@
       e.target.value = '';
     }
 
-    function importExcelFile(e) {
+    async function importExcelFile(e) {
       const file = e.target.files[0];
       if (!file) return;
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
       const reader = new FileReader();
       reader.onload = async (event) => {
         try {
@@ -1615,6 +1624,7 @@
     }
 
     async function shareSelectedJPEG() {
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
       const selected = getSelectedItems();
       if (selected.length === 0) return alert("Select at least one entry!");
       
@@ -1689,7 +1699,9 @@
       }, 'image/jpeg', 0.95);
     }
 
-    function exportPDF() {
+    async function exportPDF() {
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js');
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
       const selected = getSelectedItems().length > 0 ? getSelectedItems() : allTx;
@@ -1750,7 +1762,8 @@
       doc.save(`Expense_Report_${new Date().toISOString().slice(0,10)}.pdf`);
     }
 
-    function exportExcel() {
+    async function exportExcel() {
+      await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
       const selectedItems = getSelectedItems();
       const selected = selectedItems.length > 0 ? selectedItems : allTx;
       if (selected.length === 0) return alert("No data available to export.");
